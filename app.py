@@ -8,6 +8,7 @@ import json
 import jinja2
 import re
 import tempfile
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
@@ -20,7 +21,18 @@ from weasyprint import HTML
 # ==========================================
 st.set_page_config(page_title="Meridian Command Console", page_icon="📦", layout="wide")
 
-COMPANY_LOGO_PATH = "company_logo.png" 
+COMPANY_LOGO_PATH = "company_logo.png"
+
+def to_decimal(val):
+    """Sanitizes and converts to Decimal for accounting precision."""
+    try:
+        if isinstance(val, (int, float)):
+            return Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # Strip all non-numeric characters except decimal points
+        clean_val = re.sub(r'[^\d.]', '', str(val))
+        return Decimal(clean_val).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    except:
+        return Decimal('0.00')
 
 st.markdown("""
 <style>
@@ -280,7 +292,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
     </head>
     <body>
 
-        <!-- Header -->
         <table class="header-master">
             <tr>
                 <td style="width: 70%; vertical-align: middle;">
@@ -306,7 +317,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Exporter / Consignee Block -->
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
             <tr>
                 <td style="width: 50%; border: 1px solid #111; padding: 8px 10px;">
@@ -326,7 +336,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Matrix 0 -->
         <table class="grid">
             <tr>
                 <th>INVOICE NO.</th>
@@ -342,7 +351,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Matrix 1 -->
         <table class="grid">
             <tr>
                 <th>COUNTRY OF ORIGIN</th>
@@ -358,7 +366,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Matrix 2 (NEW) -->
         <table class="grid">
             <tr>
                 <th>BILL OF LADING (B/L#)</th>
@@ -372,7 +379,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Manifest Table -->
         <table class="manifest">
             <tr>
                 <th style="width: 60%;">SPECIFICATION OF COMMODITIES / CARGO DESCRIPTION</th>
@@ -388,7 +394,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             </tr>
         </table>
 
-        <!-- Footer / Signature / Declarations Block -->
         <table class="footer-table">
             <tr>
                 <td style="width: 60%; padding-right: 20px; vertical-align: top;">
@@ -450,15 +455,25 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
         chosen_template = s_profile.get("Template", "classic.html")
         if not os.path.exists(f"./templates/{chosen_template}"): chosen_template = "classic.html"
-        try: template = template_env.get_template(chosen_template)
-        except: template = template_env.from_string("<h1>{{title}}</h1><p><b>Exporter:</b> {{supplier_name}}<br><b>Consignee:</b> {{client_name}}</p><table border='1' width='100%' cellspacing='0' cellpadding='5'><thead><tr bgcolor='#f2f2f2'><th>Description</th><th>Qty</th><th>Total</th></tr></thead><tbody>{% for item in items %}<tr><td>{{item.Description}}</td><td>{{item.Qty}}</td><td>{{item.Total}}</td></tr>{% endfor %}</tbody></table>")
+        try: 
+            template = template_env.get_template(chosen_template)
+        except: 
+            template = template_env.from_string("<h1>{{title}}</h1><p><b>Exporter:</b> {{supplier_name}}<br><b>Consignee:</b> {{client_name}}</p><table border='1' width='100%' cellspacing='0' cellpadding='5'><thead><tr bgcolor='#f2f2f2'><th>Description</th><th>Qty</th><th>Total</th></tr></thead><tbody>{% for item in items %}<tr><td>{{item.Description}}</td><td>{{item.Qty}}</td><td>{{item.Total}}</td></tr>{% endfor %}</tbody></table>")
 
         items = []
         for idx, row in df.iterrows():
             desc = str(row["Description"])[:250]
             qty = f"{row.get('Qty', ''):,}" if pd.notna(row.get('Qty')) and row.get('Qty') != "" else ""
-            price = f"{row.get('UnitPrice', ''):.2f}" if pd.notna(row.get('UnitPrice')) and row.get('UnitPrice') != "" else ""
-            total = f"{row.get('Total Foreign (USD)', ''):.2f}" if pd.notna(row.get('Total Foreign (USD)')) and row.get('Total Foreign (USD)') != "" else ""
+            # Safely format decimals or floats
+            try:
+                price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
+            except ValueError:
+                price = ""
+            try:
+                total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
+            except ValueError:
+                total = ""
+                
             items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
             
         rendered_html = template.render({
@@ -664,22 +679,40 @@ def render_admin_tracker():
         st.subheader("Targeted Document Generation (Save Independently)")
         
         df_clean = pd.DataFrame(columns=["Description", "Qty", "UnitPrice", "Total Foreign (USD)"])
-        subtotal_foreign = 0.0
-        duty_dict = {'exchange_rate': exchange_rate, 'convert_to_ttd': 0, 'duty_owed': 0, 'vat_owed': 0, 'fixed_fees': ces_fee + uf_fee, 'grand_total_ttd': 0}
+        subtotal_foreign = Decimal('0.00')
+        freight_dec = to_decimal(freight_cost)
+        ex_rate = to_decimal(exchange_rate)
+        
+        duty_dict = {'exchange_rate': ex_rate, 'convert_to_ttd': Decimal('0.00'), 'duty_owed': Decimal('0.00'), 'vat_owed': Decimal('0.00'), 'fixed_fees': to_decimal(ces_fee) + to_decimal(uf_fee), 'grand_total_ttd': Decimal('0.00')}
         
         if uploaded_file and map_description != "-- Select --" and map_qty != "-- Select --" and map_price != "-- Select --":
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
-            df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
-            df_clean["UnitPrice"] = pd.to_numeric(df_clean["UnitPrice"], errors='coerce').fillna(0.0)
-            subtotal_foreign = (df_clean["Qty"] * df_clean["UnitPrice"]).sum()
-            df_clean["Total Foreign (USD)"] = df_clean["Qty"] * df_clean["UnitPrice"]
             
-            convert_to_ttd = (subtotal_foreign + freight_cost) * exchange_rate
-            duty_owed = convert_to_ttd * (duty_percentage / 100.0)
-            vat_owed = (convert_to_ttd + duty_owed) * (vat_percentage / 100.0)
-            grand_total_ttd = duty_owed + vat_owed + ces_fee + uf_fee
-            duty_dict = {'exchange_rate': exchange_rate, 'convert_to_ttd': convert_to_ttd, 'duty_owed': duty_owed, 'vat_owed': vat_owed, 'fixed_fees': ces_fee + uf_fee, 'grand_total_ttd': grand_total_ttd}
+            # --- ACCOUNTING PRECISION LOGIC APPLIED ---
+            df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
+            df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
+            
+            # Line item total MUST be calculated and rounded first before sum
+            df_clean["Total Foreign (USD)"] = df_clean.apply(lambda x: to_decimal(Decimal(x['Qty']) * x['UnitPrice']), axis=1)
+            subtotal_foreign = df_clean["Total Foreign (USD)"].sum()
+            
+            convert_to_ttd = (subtotal_foreign + freight_dec) * ex_rate
+            duty_owed = (convert_to_ttd * (to_decimal(duty_percentage) / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            vat_owed = ((convert_to_ttd + duty_owed) * (to_decimal(vat_percentage) / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            
+            ces_fee_dec = to_decimal(ces_fee)
+            uf_fee_dec = to_decimal(uf_fee)
+            grand_total_ttd = duty_owed + vat_owed + ces_fee_dec + uf_fee_dec
+            
+            duty_dict = {
+                'exchange_rate': ex_rate, 
+                'convert_to_ttd': convert_to_ttd, 
+                'duty_owed': duty_owed, 
+                'vat_owed': vat_owed, 
+                'fixed_fees': ces_fee_dec + uf_fee_dec, 
+                'grand_total_ttd': grand_total_ttd
+            }
             
             file_state_hash = f"{uploaded_file.name}_{supplier_name}_{client_name}"
             if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
@@ -693,7 +726,7 @@ def render_admin_tracker():
         
         with t_inv:
             if st.button("⚙️ Preview Commercial Invoice"): 
-                st.session_state["h_inv"] = generate_html_document("COMMERCIAL INVOICE", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_clean, subtotal_foreign, freight_cost, additional_notes, payment_terms, signatory_position)
+                st.session_state["h_inv"] = generate_html_document("COMMERCIAL INVOICE", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_clean, subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position)
             if "h_inv" in st.session_state: 
                 display_html_preview(st.session_state["h_inv"])
                 
@@ -733,7 +766,7 @@ def render_admin_tracker():
                 st.session_state["h_car"] = generate_caricom_printout(
                     invoice_num, invoice_date, client_name, client_profile.get("Address",""), 
                     supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, 
-                    subtotal_foreign, freight_cost, subtotal_foreign + freight_cost, 
+                    subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, 
                     payment_terms, additional_notes, signatory_position, comp_data, 
                     logo_path, sig_path
                 )
@@ -746,7 +779,7 @@ def render_admin_tracker():
                         html_car_final = generate_caricom_printout(
                             invoice_num, invoice_date, client_name, client_profile.get("Address",""), 
                             supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, 
-                            subtotal_foreign, freight_cost, subtotal_foreign + freight_cost, 
+                            subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, 
                             payment_terms, additional_notes, signatory_position, comp_data, 
                             logo_path, sig_path
                         )
@@ -781,7 +814,7 @@ def render_admin_tracker():
                     
                     df_p_compiled = pd.DataFrame(calculated_rows)
                     st.session_state["df_p_compiled"] = df_p_compiled
-                    st.session_state["h_pck"] = generate_html_document("PACKING LIST MANIFEST", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_p_compiled, subtotal_foreign, freight_cost, additional_notes, payment_terms, signatory_position, is_packing=True)
+                    st.session_state["h_pck"] = generate_html_document("PACKING LIST MANIFEST", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_p_compiled, subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_packing=True)
             else:
                 st.info("Upload and map a vendor spreadsheet to enable interactive packing validation.")
                 
@@ -800,7 +833,7 @@ def render_admin_tracker():
                 
         with t_dut:
             if st.button("⚙️ Preview Customs Summary"): 
-                st.session_state["h_dut"] = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_cost, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
+                st.session_state["h_dut"] = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
             if "h_dut" in st.session_state: 
                 display_html_preview(st.session_state["h_dut"])
                 
@@ -813,7 +846,6 @@ def render_admin_tracker():
                         df_update.at[idx, "Official Duties Assessment"] = dut_link
                         save_log_data(df_update)
                         st.success("✅ Customs Summary locked!")
-
 
 # ==========================================
 # 6. NEW ADMIN RENDERERS
