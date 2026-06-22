@@ -117,7 +117,6 @@
 </head>
 <body>
 
-    <!-- TOP HEADER SEGMENT -->
     <table>
         <tr>
             <td style="width: 60%; padding: 0;">
@@ -130,7 +129,6 @@
         </tr>
     </table>
 
-    <!-- INTAKE VECTORS & METADATA -->
     <table>
         <tr>
             <td class="bill-to-box">
@@ -153,7 +151,6 @@
         </tr>
     </table>
 
-    <!-- JINJA2 ITERATION ENGINE -->
     <table class="data-table">
         <thead>
             <tr>
@@ -175,22 +172,19 @@
         </tbody>
     </table>
 
-    <!-- LOWER SUMMARY & SIGNATURE MATRIX -->
     <div class="protect-block">
         <table>
             <tr>
-                <!-- Left side: Company Stamp Block Safety Matrix -->
                 <td style="width: 48%; text-align: center; vertical-align: bottom; padding: 0;">
                     {% if sig_path %}
-                        <img src="{{ sig_path }}" alt="Company Stamp and Signature" style="height: 120px; width: auto; max-width: 300px; mix-blend-mode: multiply;">
+                        <img src="{{ sig_path }}" alt="Company Stamp and Signature" style="height: 90px; width: auto; max-width: 225px; mix-blend-mode: multiply;">
                     {% else %}
-                        <div style="height: 120px;"></div>
+                        <div style="height: 90px;"></div>
                     {% endif %}
                 </td>
                 
                 <td class="spacer"></td>
                 
-                <!-- Right side: Financial Totals -->
                 <td style="width: 48%; border: 1px solid #DDDDDD; padding: 0;">
                     <table class="totals-box" style="margin: 0; width: 100%;">
                         <tr>
