@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+    /* TYPOGRAPHY & ARTIFACT ERASURE */
+    @font-face {
+        font-family: 'HelveticaNeue';
+        src: url('HelveticaNeue.ttf');
+    }
+    
+    /* PAGE BOUNDARY & ORIENTATION */
+    @page {
+        size: letter landscape;
+        margin: 0.5in;
+    }
+
+    body {
+        font-family: 'HelveticaNeue', Helvetica, Arial, sans-serif;
+        font-size: 10pt;
+        color: #333333;
+        line-height: 1.4;
+    }
+
+    /* LEGACY STRUCTURAL TABLES */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    td, th {
+        padding: 6px 8px;
+        vertical-align: top;
+    }
+
+    /* DESIGN HIERARCHY & ECONOMY */
+    .spacer { margin-bottom: 12px; }
+    
+    .doc-title {
+        font-size: 18pt;
+        font-weight: normal;
+        letter-spacing: 2px;
+        color: #000000;
+        text-align: right;
+        margin-bottom: 5px;
+    }
+
+    .divider {
+        border-top: 1px solid #000000;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    }
+
+    /* DATA TABLE & HEADER SPLITTING */
+    .line-items th {
+        border-bottom: 1px solid #000000;
+        text-align: left;
+        font-weight: bold;
+        font-size: 9pt;
+        color: #000000;
+        text-transform: uppercase;
+    }
+    
+    .line-items td {
+        border-bottom: 1px solid #eeeeee;
+    }
+    
+    .line-items thead {
+        display: table-header-group;
+    }
+
+    /* ORPHAN PREVENTION */
+    .safe-zone {
+        page-break-inside: avoid;
+    }
+</style>
+</head>
+<body>
+
+    <!-- MINIMALIST HEADER -->
+    <table class="spacer">
+        <tr>
+            <td width="60%">
+                <strong style="font-size: 12pt; color: #000;">{{ supplier_name }}</strong><br>
+                {{ supplier_address }}<br>
+                Tax ID: 91440705MA56M7P50R
+            </td>
+            <td width="40%" style="text-align: right;">
+                <div class="doc-title">COMMERCIAL INVOICE</div>
+                <strong>Invoice No:</strong> {{ inv_no }}<br>
+                <strong>Date:</strong> {{ date }}<br>
+                <strong>B/L:</strong> {{ bl }}<br>
+                <strong>Terms:</strong> {{ payment_terms }}
+            </td>
+        </tr>
+    </table>
+
+    <div class="divider"></div>
+
+    <!-- CLIENT BLOCK -->
+    <table class="spacer">
+        <tr>
+            <td width="100%">
+                <span style="font-size: 9pt; color: #777777; font-weight: bold; text-transform: uppercase;">Bill To</span><br>
+                <strong style="font-size: 11pt; color: #000;">{{ client_name }}</strong><br>
+                {{ client_address }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- ITEM ITERATION MATRIX -->
+    <table class="line-items spacer">
+        <thead>
+            <tr>
+                <th width="50%">Description</th>
+                <th width="15%" style="text-align: center;">Qty</th>
+                <th width="15%" style="text-align: right;">Unit Price</th>
+                <th width="20%" style="text-align: right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.Description }}</td>
+                <td style="text-align: center;">{{ item.Qty }}</td>
+                <td style="text-align: right;">${{ item.UnitPrice }}</td>
+                <td style="text-align: right;">${{ item.Total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- SUMMARY & SIGN-OFF BLOCK -->
+    <div class="safe-zone">
+        <table class="spacer">
+            <tr>
+                <td width="60%" style="padding-top: 25px;">
+                    <!-- AUTHORIZED SIGNATURE FRAME -->
+                    <div style="width: 250px;">
+                        {% if sig_path %}
+                            <img src="{{ sig_path }}" style="height: 40px; width: auto;" alt="Signature">
+                        {% else %}
+                            <div style="height: 40px; width: 100%;"></div>
+                        {% endif %}
+                        <div style="border-top: 1px solid #000; padding-top: 4px; font-size: 9pt; color: #333;">
+                            Authorized Signature &mdash; {{ signatory_position }}
+                        </div>
+                    </div>
+                </td>
+                <td width="40%">
+                    <table>
+                        <tr>
+                            <td width="50%" style="text-align: right; color: #555555;">Total Cartons:</td>
+                            <td width="50%" style="text-align: right;">{{ total_ctns }}</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; color: #555555;">Subtotal:</td>
+                            <td style="text-align: right;">${{ subtotal }}</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; color: #555555;">Freight:</td>
+                            <td style="text-align: right;">${{ freight }}</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: right; border-top: 1px solid #000; font-weight: bold; padding-top: 8px; color: #000;">Grand Total:</td>
+                            <td style="text-align: right; border-top: 1px solid #000; font-weight: bold; padding-top: 8px; color: #000;">${{ grand_total }}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</body>
+</html>
