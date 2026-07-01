@@ -264,7 +264,9 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
     decl = "CARICOM COMMON MARKET DECLARATION:<br>The undermentioned exporter hereby declares that the cargo specified in this commercial invoice manifest has been produced completely within the parameters of the common market rules of origin. All values and freight indices specified herein match active terminal data profiles perfectly."
     
     img_tag = f'<img src="{logo_path}" style="max-height: 50px; max-width: 120px; display: block;">' if logo_path else ''
-    sig_tag = f'<img src="{sig_path}" style="max-height: 40px; display: block;">' if sig_path else ''
+    
+    # == THE SURGICAL FIX FOR THE CARICOM SIGNATURE ==
+    sig_tag = f'<img src="{sig_path}" style="height: 150px; max-width: 100%; object-fit: contain; mix-blend-mode: multiply; filter: brightness(1.05) contrast(1.2); display: block;">' if sig_path else ''
     
     html = f"""
     <html>
@@ -287,7 +289,9 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
             .totals-table {{ width: 100%; border-collapse: collapse; }}
             .totals-table td {{ padding: 6px 10px; font-size: 11px; border-bottom: 1px solid #e0e0e0; text-align: right; }}
             .totals-table .total-row td {{ font-weight: bold; font-size: 13px; border-top: 2px solid #111; border-bottom: 2px solid #111; background-color: #fff; }}
-            .signature-frame {{ height: 45px; border-bottom: 1px solid #111; width: 200px; margin-bottom: 4px; vertical-align: bottom; }}
+            
+            /* == THE SURGICAL FIX FOR THE CARICOM SIGNATURE HEIGHT == */
+            .signature-frame {{ height: 150px; border-bottom: 1px solid #111; width: 200px; margin-bottom: 4px; vertical-align: bottom; }}
         </style>
     </head>
     <body>
@@ -444,7 +448,8 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         for idx, row in df.iterrows():
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{int(row.get("QUANTITY",0)):,}</td></tr>'
         img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br></body></html>'
+        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
+        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
