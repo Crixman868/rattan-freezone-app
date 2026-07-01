@@ -20,7 +20,7 @@ from weasyprint import HTML
 # ==========================================
 st.set_page_config(page_title="Meridian Logistics", page_icon="📦", layout="wide")
 
-COMPANY_LOGO_PATH = "company_logo.png"
+COMPANY_LOGO_PATH = "company_logo.png" # Place your logo image in the main folder with this name
 
 st.markdown("""
 <style>
@@ -51,6 +51,7 @@ st.markdown("""
     }
 
     /* --- THE INVISIBLE TEXT FIX FOR MOBILE --- */
+    /* Forces all text inside the expanders to be dark, ignoring mobile dark mode */
     [data-testid="stExpander"] p, 
     [data-testid="stExpander"] h3, 
     [data-testid="stExpander"] h4, 
@@ -60,6 +61,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Create required local directories if they don't exist
 for folder in ["uploaded_docs", "logos", "signatures", "watermarks", "templates"]:
     if not os.path.exists(folder): os.makedirs(folder)
 
@@ -97,7 +99,6 @@ def get_drive_service():
     creds = HumanCredentials.from_authorized_user_info(token_dict)
     return build('drive', 'v3', credentials=creds)
 
-@st.cache_data(ttl=60, show_spinner=False)
 def load_log_data():
     try: 
         return pd.DataFrame(get_gspread_client().open_by_url(SHEET_URL).sheet1.get_all_records())
@@ -300,6 +301,13 @@ def render_master_log():
                     with col4: new_lodg = st.radio("Lodged", ["Yes", "No"], index=0 if row.get("Lodged Status") == "Yes" else 1, horizontal=True, key=f"lodged_{idx}")
                     with col5: new_stat = st.selectbox("Shipment Status", ["Active", "Delivered"], index=0 if ship_status != "Delivered" else 1, key=f"stat_{idx}")
                     with col6: new_naldo = st.radio("NALDO Code", ["Yes", "No"], index=0 if naldo_val == "YES" else 1, horizontal=True, key=f"naldo_{idx}")
+                else:
+                    with col1: st.markdown(f"**Container #:**<br>{row.get('Container #', 'N/A')}", unsafe_allow_html=True)
+                    with col2: st.markdown(f"**Origin:**<br>{row.get('Country of Origin', 'N/A')}", unsafe_allow_html=True)
+                    with col3: st.markdown(f"**ETA:**<br>{current_date}", unsafe_allow_html=True)
+                    with col4: st.markdown(f"**Lodged:**<br>{row.get('Lodged Status', 'No')}", unsafe_allow_html=True)
+                    with col5: st.markdown(f"**Status:**<br>{ship_status}", unsafe_allow_html=True)
+                    with col6: st.markdown(f"**NALDO Code:**<br>{'Yes' if naldo_val == 'YES' else 'No'}", unsafe_allow_html=True)
                 
                 st.write("---")
                 st.subheader("Document Vault (10-Slot Matrix)")
@@ -343,7 +351,6 @@ def render_master_log():
                                 new_link = upload_physical_file_to_drive(up_file, doc_filename, client_name, inv_no)
                                 if new_link: df_update.at[row_index, slot_name] = new_link
                             if save_log_data(df_update):
-                                load_log_data.clear()
                                 st.success("✅ Updates saved!")
                                 st.rerun()
 
@@ -527,7 +534,6 @@ def render_admin_tracker():
                             df_all = pd.DataFrame([new_row])
                             
                         save_log_data(df_all)
-                        load_log_data.clear()
                         st.success("🎉 Shipment data locked and synced! Exact Replica PDFs are now available in the Vault.")
                         st.balloons()
                     except Exception as sheet_err:
@@ -536,12 +542,19 @@ def render_admin_tracker():
                 st.warning("⚠️ Workspace Validation Error: Ensure client and supplier selections are active.")
 
 # ==========================================
-# 5. NAVIGATION & ROUTER (Standalone)
+# 5. THE GATEKEEPER & ROUTER (Execution)
 # ==========================================
+
+is_admin = True
+st.session_state["role"] = "admin"
+
 st.sidebar.title("🚢 Majestic Freight")
-st.sidebar.write("---")
+
 nav_options = ["📋 Master Log", "📦 Master Tracker"]
+
 nav_selection = st.sidebar.radio("Navigation", nav_options)
+
+st.sidebar.write("---")
 
 if nav_selection == "📋 Master Log":
     render_master_log()
