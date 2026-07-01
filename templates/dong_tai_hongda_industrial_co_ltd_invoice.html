@@ -77,7 +77,6 @@
 </head>
 <body>
 
-    <!-- MINIMALIST HEADER -->
     <table class="spacer">
         <tr>
             <td width="60%">
@@ -97,7 +96,6 @@
 
     <div class="divider"></div>
 
-    <!-- CLIENT BLOCK -->
     <table class="spacer">
         <tr>
             <td width="100%">
@@ -108,7 +106,6 @@
         </tr>
     </table>
 
-    <!-- ITEM ITERATION MATRIX -->
     <table class="line-items spacer">
         <thead>
             <tr>
@@ -130,17 +127,15 @@
         </tbody>
     </table>
 
-    <!-- SUMMARY & SIGN-OFF BLOCK -->
     <div class="safe-zone">
         <table class="spacer">
             <tr>
                 <td width="60%" style="padding-top: 25px;">
-                    <!-- AUTHORIZED SIGNATURE FRAME -->
-                    <div style="width: 250px;">
+                    <div style="width: 280px;">
                         {% if sig_path %}
-                            <img src="{{ sig_path }}" style="height: 40px; width: auto;" alt="Signature">
+                            <img src="{{ sig_path }}" style="height: 150px; max-width: 100%; width: auto; object-fit: contain;" alt="Signature">
                         {% else %}
-                            <div style="height: 40px; width: 100%;"></div>
+                            <div style="height: 150px; width: 100%;"></div>
                         {% endif %}
                         <div style="border-top: 1px solid #000; padding-top: 4px; font-size: 9pt; color: #333;">
                             Authorized Signature &mdash; {{ signatory_position }}
