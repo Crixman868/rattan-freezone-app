@@ -73,18 +73,23 @@
     .safe-zone {
         page-break-inside: avoid;
     }
+    
+    /* Forces the last row of the table to stick to the summary footer */
+    .line-items tbody tr:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+    }
 </style>
 </head>
 <body>
 
     <table class="spacer">
         <tr>
-            <td width="60%">
+            <td width="60%" style="vertical-align: middle;">
                 <strong style="font-size: 12pt; color: #000;">{{ supplier_name }}</strong><br>
-                {{ supplier_address }}<br>
-                Tax ID: 91440705MA56M7P50R
+                {{ supplier_address }}
             </td>
-            <td width="40%" style="text-align: right;">
+            <td width="40%" style="text-align: right; vertical-align: middle;">
                 <div class="doc-title">COMMERCIAL INVOICE</div>
                 <strong>Invoice No:</strong> {{ inv_no }}<br>
                 <strong>Date:</strong> {{ date }}<br>
@@ -115,6 +120,7 @@
                 <th width="20%" style="text-align: right;">Total</th>
             </tr>
         </thead>
+        
         <tbody>
             {% for item in items %}
             <tr>
@@ -125,43 +131,47 @@
             </tr>
             {% endfor %}
         </tbody>
-    </table>
-
-    <div class="safe-zone">
-        <table class="spacer">
+        
+        <tfoot class="safe-zone">
             <tr>
-                <td width="60%" style="padding-top: 25px;">
-                    <div style="width: 320px;">
-                        {% if sig_path %}
-                            <img src="{{ sig_path }}" style="height: 200px; max-width: 100%; width: auto; object-fit: contain; mix-blend-mode: multiply; filter: brightness(1.05) contrast(1.2);" alt="Signature">
-                        {% else %}
-                            <div style="height: 200px; width: 100%;"></div>
-                        {% endif %}
-                    </div>
-                </td>
-                <td width="40%">
-                    <table>
+                <td colspan="4" style="padding: 0; border: none;">
+                    <table class="spacer" style="width: 100%; margin-top: 15px;">
                         <tr>
-                            <td width="50%" style="text-align: right; color: #555555;">Total Cartons:</td>
-                            <td width="50%" style="text-align: right;">{{ total_ctns }}</td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; color: #555555;">Subtotal:</td>
-                            <td style="text-align: right;">${{ subtotal }}</td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; color: #555555;">Freight:</td>
-                            <td style="text-align: right;">${{ freight }}</td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: right; border-top: 1px solid #000; font-weight: bold; padding-top: 8px; color: #000;">Grand Total:</td>
-                            <td style="text-align: right; border-top: 1px solid #000; font-weight: bold; padding-top: 8px; color: #000;">${{ grand_total }}</td>
+                            <td width="60%" style="padding-top: 25px;">
+                                <div style="width: 320px;">
+                                    {% if sig_path %}
+                                        <img src="{{ sig_path }}" style="height: 200px; max-width: 100%; width: auto; object-fit: contain; mix-blend-mode: multiply; filter: brightness(1.05) contrast(1.2);" alt="Signature">
+                                    {% else %}
+                                        <div style="height: 200px; width: 100%;"></div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td width="40%">
+                                <table style="width: 100%;">
+                                    <tr>
+                                        <td width="50%" style="text-align: right; color: #555555; border: none;">Total Cartons:</td>
+                                        <td width="50%" style="text-align: right; border: none;">{{ total_ctns }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="text-align: right; color: #555555; border: none;">Subtotal:</td>
+                                        <td style="text-align: right; border: none;">${{ subtotal }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="text-align: right; color: #555555; border: none;">Freight:</td>
+                                        <td style="text-align: right; border: none;">${{ freight }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="text-align: right; border-top: 1px solid #000 !important; font-weight: bold; padding-top: 8px; color: #000;">Grand Total:</td>
+                                        <td style="text-align: right; border-top: 1px solid #000 !important; font-weight: bold; padding-top: 8px; color: #000;">${{ grand_total }}</td>
+                                    </tr>
+                                </table>
+                            </td>
                         </tr>
                     </table>
                 </td>
             </tr>
-        </table>
-    </div>
+        </tfoot>
+    </table>
 
 </body>
 </html>
