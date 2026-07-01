@@ -20,7 +20,7 @@ from weasyprint import HTML
 # ==========================================
 st.set_page_config(page_title="Meridian Logistics", page_icon="📦", layout="wide")
 
-COMPANY_LOGO_PATH = "company_logo.png" # Place your logo image in the main folder with this name
+COMPANY_LOGO_PATH = "company_logo.png"
 
 st.markdown("""
 <style>
@@ -51,47 +51,15 @@ st.markdown("""
     }
 
     /* --- THE INVISIBLE TEXT FIX FOR MOBILE --- */
-    /* Forces all text inside the expanders to be dark, ignoring mobile dark mode */
     [data-testid="stExpander"] p, 
     [data-testid="stExpander"] h3, 
     [data-testid="stExpander"] h4, 
     [data-testid="stExpander"] h5 {
         color: #1e293b !important;
     }
-
-    /* --- GATEKEEPER LOGIN CSS --- */
-    .login-wrapper {
-        max-width: 400px;
-        margin: 5vh auto 20px auto;
-        text-align: center;
-    }
-    [data-testid="stForm"] {
-        max-width: 400px;
-        margin: 0 auto;
-        padding: 2.5rem;
-        border-radius: 12px;
-        box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.08);
-        background-color: #ffffff;
-        border: 1px solid #f1f5f9;
-    }
-    [data-testid="stFormSubmitButton"] button {
-        width: 100%;
-        background-color: #0f172a !important; /* Dark slate blue */
-        color: white !important;
-        font-weight: 600;
-        border-radius: 8px;
-        padding: 0.6rem;
-        transition: all 0.3s ease;
-        margin-top: 10px;
-    }
-    [data-testid="stFormSubmitButton"] button:hover {
-        background-color: #1e293b !important;
-        box-shadow: 0px 4px 10px rgba(15, 23, 42, 0.3);
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Create required local directories if they don't exist
 for folder in ["uploaded_docs", "logos", "signatures", "watermarks", "templates"]:
     if not os.path.exists(folder): os.makedirs(folder)
 
@@ -129,7 +97,6 @@ def get_drive_service():
     creds = HumanCredentials.from_authorized_user_info(token_dict)
     return build('drive', 'v3', credentials=creds)
 
-# ADDED @st.cache_data to prevent Google API 429 Error limits
 @st.cache_data(ttl=60, show_spinner=False)
 def load_log_data():
     try: 
@@ -296,7 +263,7 @@ def display_html_preview(raw_html):
 
 def render_master_log():
     st.title("🗄️ Master Log: Logistics Control Tower")
-    is_admin = (st.session_state.get("role") == "admin")
+    is_admin = True
 
     df = load_log_data()
 
@@ -333,13 +300,6 @@ def render_master_log():
                     with col4: new_lodg = st.radio("Lodged", ["Yes", "No"], index=0 if row.get("Lodged Status") == "Yes" else 1, horizontal=True, key=f"lodged_{idx}")
                     with col5: new_stat = st.selectbox("Shipment Status", ["Active", "Delivered"], index=0 if ship_status != "Delivered" else 1, key=f"stat_{idx}")
                     with col6: new_naldo = st.radio("NALDO Code", ["Yes", "No"], index=0 if naldo_val == "YES" else 1, horizontal=True, key=f"naldo_{idx}")
-                else:
-                    with col1: st.markdown(f"**Container #:**<br>{row.get('Container #', 'N/A')}", unsafe_allow_html=True)
-                    with col2: st.markdown(f"**Origin:**<br>{row.get('Country of Origin', 'N/A')}", unsafe_allow_html=True)
-                    with col3: st.markdown(f"**ETA:**<br>{current_date}", unsafe_allow_html=True)
-                    with col4: st.markdown(f"**Lodged:**<br>{row.get('Lodged Status', 'No')}", unsafe_allow_html=True)
-                    with col5: st.markdown(f"**Status:**<br>{ship_status}", unsafe_allow_html=True)
-                    with col6: st.markdown(f"**NALDO Code:**<br>{'Yes' if naldo_val == 'YES' else 'No'}", unsafe_allow_html=True)
                 
                 st.write("---")
                 st.subheader("Document Vault (10-Slot Matrix)")
@@ -383,7 +343,7 @@ def render_master_log():
                                 new_link = upload_physical_file_to_drive(up_file, doc_filename, client_name, inv_no)
                                 if new_link: df_update.at[row_index, slot_name] = new_link
                             if save_log_data(df_update):
-                                load_log_data.clear() # Cache Buster
+                                load_log_data.clear()
                                 st.success("✅ Updates saved!")
                                 st.rerun()
 
@@ -567,7 +527,7 @@ def render_admin_tracker():
                             df_all = pd.DataFrame([new_row])
                             
                         save_log_data(df_all)
-                        load_log_data.clear() # Cache Buster
+                        load_log_data.clear()
                         st.success("🎉 Shipment data locked and synced! Exact Replica PDFs are now available in the Vault.")
                         st.balloons()
                     except Exception as sheet_err:
@@ -576,80 +536,14 @@ def render_admin_tracker():
                 st.warning("⚠️ Workspace Validation Error: Ensure client and supplier selections are active.")
 
 # ==========================================
-# 5. THE GATEKEEPER & ROUTER (Execution)
+# 5. NAVIGATION & ROUTER (Standalone)
 # ==========================================
+st.sidebar.title("🚢 Majestic Freight")
+st.sidebar.write("---")
+nav_options = ["📋 Master Log", "📦 Master Tracker"]
+nav_selection = st.sidebar.radio("Navigation", nav_options)
 
-# Hybrid Persistence Check: If URL says we are logged in, restore the session.
-if st.query_params.get("auth") == "yes":
-    st.session_state["logged_in"] = True
-    st.session_state["role"] = st.query_params.get("role")
-
-# Initialize base state
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-    st.session_state["role"] = None
-
-# If not authenticated, show the beautiful login form
-if not st.session_state["logged_in"]:
-    
-    # Create 3 columns: Left spacer, Center column (where the login goes), Right spacer
-    # The [1, 1.2, 1] ratio makes the middle column perfectly sized for a login box
-    left_spacer, center_col, right_spacer = st.columns([1, 1.2, 1])
-    
-    with center_col:
-        # 1. Load the Logo (Force centered via inline CSS)
-        logo_b64 = get_img_b64(COMPANY_LOGO_PATH)
-        if logo_b64:
-            st.markdown(f'<div style="text-align: center;"><img src="{logo_b64}" style="max-height: 160px; margin-bottom: 10px;"></div>', unsafe_allow_html=True)
-        else:
-            st.markdown("<h2 style='text-align: center; color: #1e293b; margin-bottom: 0px;'>🚢 Majestic Freight</h2>", unsafe_allow_html=True)
-        
-        st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 25px;'>Secure Gatekeeper Authorization</p>", unsafe_allow_html=True)
-        
-        # 2. Render the styled form
-        with st.form("login"):
-            username = st.text_input("Username").strip().lower()
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Access System"):
-                users = st.secrets.get("users", {})
-                if username in users and users[username].get("password") == password:
-                    # Set Session State
-                    role = users[username].get("role")
-                    st.session_state["logged_in"] = True
-                    st.session_state["role"] = role
-                    
-                    # Set URL Parameters for Mobile "Background Tab" Persistence
-                    st.query_params["auth"] = "yes"
-                    st.query_params["role"] = role
-                    
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials.")
-else:
-    # --- The user is Authenticated ---
-    is_admin = (st.session_state.get("role") == "admin")
-    
-    # 1. Setup the Sidebar Menu
-    st.sidebar.title(f"User: {str(st.session_state.get('role')).capitalize()}")
-    
-    # Restrict options based on role
-    if is_admin:
-        nav_options = ["📋 Master Log", "📦 Master Tracker"]
-    else:
-        nav_options = ["📋 Master Log"]
-        
-    nav_selection = st.sidebar.radio("Navigation", nav_options)
-    
-    # 2. Setup the Logout Button
-    st.sidebar.write("---")
-    if st.sidebar.button("Logout", type="primary"):
-        st.query_params.clear()
-        st.session_state["logged_in"] = False
-        st.session_state["role"] = None
-        st.rerun()
-
-    # 3. Route to the correct view function
-    if nav_selection == "📋 Master Log":
-        render_master_log()
-    elif nav_selection == "📦 Master Tracker":
-        render_admin_tracker()
+if nav_selection == "📋 Master Log":
+    render_master_log()
+elif nav_selection == "📦 Master Tracker":
+    render_admin_tracker()
