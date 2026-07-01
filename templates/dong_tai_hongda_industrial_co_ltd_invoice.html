@@ -115,13 +115,11 @@
         <thead>
             <tr>
                 {% if is_caricom %}
-                    <!-- CARICOM SPECIFIC HEADERS -->
                     <th width="50%">Specification of Commodities / Cargo Description</th>
                     <th width="15%" style="text-align: center;">Count</th>
                     <th width="15%" style="text-align: right;">Price (USD)</th>
                     <th width="20%" style="text-align: right;">(USD)</th>
                 {% else %}
-                    <!-- STANDARD INVOICE HEADERS -->
                     <th width="50%">Description</th>
                     <th width="15%" style="text-align: center;">Qty</th>
                     <th width="15%" style="text-align: right;">Unit Price</th>
@@ -146,9 +144,6 @@
                 <td colspan="4" style="padding: 0; border: none;">
                     
                     {% if is_caricom %}
-                    <!-- ============================================== -->
-                    <!-- CARICOM LAYOUT FOOTER                          -->
-                    <!-- ============================================== -->
                     <table class="spacer" style="width: 100%; margin-top: 25px;">
                         <tr>
                             <td width="60%" style="padding-right: 30px; vertical-align: top;">
@@ -188,9 +183,6 @@
                     </table>
 
                     {% else %}
-                    <!-- ============================================== -->
-                    <!-- STANDARD COMMERCIAL INVOICE FOOTER             -->
-                    <!-- ============================================== -->
                     <table class="spacer" style="width: 100%; margin-top: 15px;">
                         <tr>
                             <td width="60%" style="padding-top: 25px;">
@@ -200,6 +192,9 @@
                                     {% else %}
                                         <div style="height: 200px; width: 100%;"></div>
                                     {% endif %}
+                                    <div style="border-top: 1px solid #000; padding-top: 4px; font-size: 9pt; color: #333;">
+                                        Authorized Signature &mdash; {{ signatory_position }}
+                                    </div>
                                 </div>
                             </td>
                             <td width="40%">
