@@ -106,11 +106,18 @@
             border: 1px solid #cccccc;
         }
 
+        .signature-frame {
+            height: 45px;
+            border-bottom: 1px solid #222222;
+            width: 200px;
+            margin-bottom: 4px;
+            vertical-align: bottom;
+        }
+
         .signature-line {
-            border-top: 1px solid #222222;
-            margin-top: 40px;
-            text-align: center;
+            text-align: left;
             font-size: 8.5px;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -195,9 +202,18 @@
     <div class="summary-signature-container">
         <table border="0" cellpadding="0" cellspacing="0" style="width: 100%;">
             <tr>
-                <td width="50%" style="padding-left: 0; padding-top: 0;">
-                    </td>
-                <td width="50%" style="padding-right: 0; padding-top: 0;">
+                <td width="55%" style="padding-left: 0; padding-top: 0; vertical-align: bottom;">
+                    <div class="signature-frame">
+                        {% if sig_path %}
+                            <img src="{{ sig_path }}" style="max-height: 40px; display: block;">
+                        {% endif %}
+                    </div>
+                    <div class="signature-line">
+                        <strong>Authorized Signature</strong><br />
+                        <span style="color: #555555; font-size: 8px;">{{ signatory_position }}</span>
+                    </div>
+                </td>
+                <td width="45%" style="padding-right: 0; padding-top: 0;">
                     <table border="0" cellpadding="0" cellspacing="0" class="summary-box" style="width: 100%;">
                         <tr>
                             <td class="meta-label" style="padding: 6px;">Subtotal:</td>
@@ -205,28 +221,13 @@
                         </tr>
                         <tr>
                             <td class="meta-label" style="padding: 6px;">Freight:</td>
-                            <td class="meta-value text-right" style="padding: 6px;">${{ freight }}</td>
+                            <td class="meta-value text-right" style="padding: 6px;">${{ freight if freight else "0.00" }}</td>
                         </tr>
                         <tr style="background-color: #222222;">
                             <td class="meta-label" style="padding: 7px; color: #ffffff; font-weight: bold;">Grand Total:</td>
                             <td class="meta-value text-right" style="padding: 7px; color: #ffffff; font-weight: bold; font-size: 11px;">${{ grand_total }}</td>
                         </tr>
                     </table>
-                </td>
-            </tr>
-        </table>
-
-        <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 30px; width: 100%;">
-            <tr>
-                <td width="60%"></td>
-                <td width="40%" style="padding-right: 0;">
-                    <div style="height: 50px; text-align: center;">
-                        <img src="{{ sig_path|default('signatures/EL PLANETA S.A._sig.png') }}" style="height: 50px; max-width: 180px;" alt="Signature File" />
-                    </div>
-                    <div class="signature-line">
-                        <strong>Authorized Signature</strong><br />
-                        <span style="color: #555555; font-size: 8px;">{{ signatory_position|default('Authorized Director') }}</span>
-                    </div>
                 </td>
             </tr>
         </table>
