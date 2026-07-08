@@ -116,14 +116,11 @@
 </head>
 <body>
 
-    <!-- MASTER HEADER BLOCK -->
     <table border="0" cellpadding="0" cellspacing="0">
         <tr>
-            <!-- Left Column: Primary Invoice Stream & Embedded Meta Matrix -->
             <td width="55%" style="padding-left: 0;">
                 <div class="document-title">INVOICE</div>
                 
-                <!-- Embedded Metadata Table Matrix Block -->
                 <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 12px; width: 100%;">
                     <tr>
                         <td class="meta-label" style="padding-left: 0; width: 40%;">INVOICE NO:</td>
@@ -143,14 +140,12 @@
                     </tr>
                 </table>
 
-                <!-- Bottom Segment of Column Container -->
                 <div style="margin-top: 12px;">
                     <span class="meta-label">CTN #:</span>
                     <span class="meta-value" style="font-weight: bold; font-size: 11px;">{{ total_ctns }}</span>
                 </div>
             </td>
             
-            <!-- Right Column: Corporate Supplier Identity -->
             <td width="45%" style="padding-right: 0; text-align: right;">
                 <div class="company-title">{{ supplier_name }}</div>
                 <div style="margin-top: 4px; color: #444444; font-size: 9px; line-height: 1.4;">
@@ -162,7 +157,6 @@
 
     <hr style="border: none; border-top: 2px solid #222222; margin-top: 8px; margin-bottom: 12px;" />
 
-    <!-- ENTITY MATRIX BLOCK -->
     <table border="0" cellpadding="0" cellspacing="0">
         <tr>
             <td width="50%" style="padding-left: 0; padding-right: 15px;">
@@ -173,12 +167,10 @@
                 </div>
             </td>
             <td width="50%" style="padding-right: 0; padding-left: 15px;">
-                <!-- Internal Routing / Free Space Column Buffer -->
-            </td>
+                </td>
         </tr>
     </table>
 
-    <!-- MANIFEST LINE ITEMS TABLE -->
     <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
         <thead>
             <tr>
@@ -200,13 +192,11 @@
         </tbody>
     </table>
 
-    <!-- SUMMARY & SIGNATURE SECURE WRAPPER -->
     <div class="summary-signature-container">
         <table border="0" cellpadding="0" cellspacing="0" style="width: 100%;">
             <tr>
                 <td width="50%" style="padding-left: 0; padding-top: 0;">
-                    <!-- Balanced spacer column -->
-                </td>
+                    </td>
                 <td width="50%" style="padding-right: 0; padding-top: 0;">
                     <table border="0" cellpadding="0" cellspacing="0" class="summary-box" style="width: 100%;">
                         <tr>
@@ -226,19 +216,16 @@
             </tr>
         </table>
 
-        <!-- SIGNATORY CONTROL MATRIX -->
         <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 30px; width: 100%;">
             <tr>
                 <td width="60%"></td>
                 <td width="40%" style="padding-right: 0;">
-                    <div style="height: 40px; text-align: center;">
-                        {% if sig_path %}
-                            <img src="{{ sig_path }}" style="height: 40px;" alt="Signature Vector" />
-                        {% endif %}
+                    <div style="height: 45px; text-align: center;">
+                        <img src="{{ sig_path|default('signatures/EL PLANETA S.A._sig.png') }}" style="height: 45px; max-width: 180px;" alt="Signature Vector" />
                     </div>
                     <div class="signature-line">
                         <strong>Authorized Signature</strong><br />
-                        <span style="color: #555555; font-size: 8px;">{{ signatory_position }}</span>
+                        <span style="color: #555555; font-size: 8px;">{{ signatory_position|default('Authorized Director') }}</span>
                     </div>
                 </td>
             </tr>
