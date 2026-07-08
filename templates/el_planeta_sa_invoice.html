@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Invoice Template - El Planeta, S.A.</title>
     <style>
-        /* Typography Mapping to Prevent I/L Engine Artifacts */
         @font-face {
             font-family: 'LiberationSans';
             src: url('fonts/LiberationSans-Regular.ttf');
@@ -44,7 +43,6 @@
             text-align: left;
         }
 
-        /* Core Structure Typography */
         .document-title {
             font-size: 24px;
             font-weight: bold;
@@ -82,7 +80,6 @@
             text-transform: uppercase;
         }
 
-        /* Repeatable Headers & Grid Spacing */
         thead { 
             display: table-header-group; 
         }
@@ -95,7 +92,6 @@
             text-align: right;
         }
 
-        /* Anti-Orphan Layout Container Boxes */
         .summary-signature-container {
             page-break-inside: avoid;
             margin-top: 10px;
@@ -106,18 +102,17 @@
             border: 1px solid #cccccc;
         }
 
+        /* Verified Signature Formatting */
+        .signature-suite {
+            margin-top: 15px;
+        }
+
         .signature-frame {
             height: 45px;
-            border-bottom: 1px solid #222222;
+            border-bottom: 1px solid #111111;
             width: 200px;
             margin-bottom: 4px;
             vertical-align: bottom;
-        }
-
-        .signature-line {
-            text-align: left;
-            font-size: 8.5px;
-            margin-top: 2px;
         }
     </style>
 </head>
@@ -174,7 +169,7 @@
                 </div>
             </td>
             <td width="50%" style="padding-right: 0; padding-left: 15px;">
-                </td>
+            </td>
         </tr>
     </table>
 
@@ -203,14 +198,14 @@
         <table border="0" cellpadding="0" cellspacing="0" style="width: 100%;">
             <tr>
                 <td width="55%" style="padding-left: 0; padding-top: 0; vertical-align: bottom;">
-                    <div class="signature-frame">
-                        {% if sig_path %}
-                            <img src="{{ sig_path }}" style="max-height: 40px; display: block;">
-                        {% endif %}
-                    </div>
-                    <div class="signature-line">
-                        <strong>Authorized Signature</strong><br />
-                        <span style="color: #555555; font-size: 8px;">{{ signatory_position }}</span>
+                    <div class="signature-suite">
+                        <div style="font-size: 8px; color: #111111; font-weight: bold;">Authorized Signature</div>
+                        <div class="signature-frame">
+                            {% if sig_path %}
+                                <img src="{{ sig_path }}" style="max-height: 40px; display: block;">
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 9px; color: #666666; margin-top: 2px;">{{ signatory_position }}</div>
                     </div>
                 </td>
                 <td width="45%" style="padding-right: 0; padding-top: 0;">
