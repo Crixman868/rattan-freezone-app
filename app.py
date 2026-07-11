@@ -13,7 +13,6 @@ from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
-from google.oauth2 import service_account
 from googleapiclient.http import MediaFileUpload
 from weasyprint import HTML
 
@@ -35,7 +34,7 @@ def to_decimal(val):
         return Decimal('0.00')
 
 def safe_qty_parse(val):
-    """DEFENSIVE PARSER: Ensures no crashes on packing list data."""
+    """FIXED: Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
@@ -269,9 +268,8 @@ def save_supplier_mapping(supplier, desc, qty, price):
 # 4. DOCUMENT GENERATORS
 # ==========================================
 
-# --- NEW STANDALONE CARICOM MODULE ---
+# --- CARICOM MODULE ---
 def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path, orientation, primary_hex):
-    # Using the separate CARICOM template
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
     template = env.get_template("caricom_template.html")
     return template.render(
@@ -286,11 +284,11 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
 def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_profile, bl, total_ctns, df, total_val, freight=None, additional_notes="", payment_terms="", signatory_position="", is_packing=False, is_duties=False, duty_data=None):
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
-
+    
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
-            # FIXED: Defensive Parsing applied here
+            # FIXED: Defensive parsing applied
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
@@ -346,7 +344,7 @@ def display_html_preview(raw_html):
 
 
 # ==========================================
-# 5. APP VIEWS (THE "PAGES")
+# 5. APP VIEWS
 # ==========================================
 
 def render_master_log():
@@ -443,11 +441,11 @@ def render_admin_tracker():
         return
 
     df_current = load_log_data()
-    # HYDRATION FIX: row_data retrieves the existing record
-    row_data = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
-    row_data = row_data.iloc[0] if not row_data.empty else {}
+    # HYDRATION: Retrieve row data
+    match_row = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
+    row_data = match_row.iloc[0] if not match_row.empty else {}
     
-    # HYDRATION HELPER
+    # HYDRATION: Helper function to get values
     def get_val(key, default=""): return row_data.get(key, default)
 
     client_file = "clients.csv"
@@ -460,7 +458,7 @@ def render_admin_tracker():
 
     with col1:
         st.subheader("Data Intake & Matrix Mapping")
-        # Hydrated inputs
+        # Use get_val() for hydration
         client_name = st.selectbox("Client Workspace", client_options, index=client_options.index(get_val("Client Name")) if get_val("Client Name") in client_options else 0)
         supplier_name = st.selectbox("Supplier Profile", supplier_options, index=supplier_options.index(get_val("Supplier Name", "Select a Supplier...")) if get_val("Supplier Name") in supplier_options else 0)
         
@@ -468,46 +466,54 @@ def render_admin_tracker():
         client_profile = get_entity_profile("clients.csv", client_name)
         
         uploaded_file = st.file_uploader("Drop Raw Vendor Spreadsheet (CSV or Excel)", type=["csv", "xlsx"])
+        saved_desc, saved_qty, saved_price = get_supplier_mapping(supplier_name)
         
-        # Manifest fields
+        # Manifest fields with hydration
         invoice_num = st.text_input("Invoice Number", value=get_val("Invoice No"))
         invoice_date = st.text_input("Invoice Date / ETA", value=get_val("ETA", datetime.now().strftime("%Y-%m-%d")))
+        bl_number = st.text_input("Bill of Lading (BL#)", value=get_val("Bill of Lading Scan"))
         freight_cost = st.number_input("Ocean Freight (USD)", value=float(to_decimal(get_val("Freight", 2500.00))))
-        signatory_position = st.text_input("Signatory Position", value=get_val("Signatory", "Authorized Director"))
+        signatory_position = st.text_input("Signatory Position", value=get_val("Signatory Position", "Authorized Director"))
         
+        additional_notes = st.text_area("Cargo Notes", value=get_val("Cargo Notes", "Assorted cargo bulk manifest"))
+
     with col2:
+        # TABS (Simplified for example, ensure you put all logic back inside the tabs)
         t_inv, t_car, t_pck, t_dut = st.tabs(["📄 Invoice", "🌐 CARICOM", "📋 Packing Manifest", "🇹🇹 Customs Audit"])
         
         with t_car:
-            # Orientation radio
             orientation = st.radio("Orientation", ["portrait", "landscape"], index=1)
             if st.button("⚙️ Preview CARICOM"):
                 s_profile = get_entity_profile("suppliers.csv", supplier_name)
                 logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
                 sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
-                
-                # Render using Template
-                html = generate_caricom_printout(
-                    invoice_num, invoice_date, client_name, client_profile.get("Address",""), 
-                    supplier_name, s_profile.get("Address",""), "BL-123", 0, 0, freight_cost, 0, 
-                    "NET 30", "Notes", signatory_position, {}, logo_path, sig_path, 
-                    orientation, s_profile.get("PrimaryHex", "#000000")
-                )
+                html = generate_caricom_printout(invoice_num, invoice_date, client_name, client_profile.get("Address",""), 
+                                                 supplier_name, s_profile.get("Address",""), bl_number, 0, 0, freight_cost, 0, 
+                                                 "NET 30", additional_notes, signatory_position, {}, logo_path, sig_path, orientation, s_profile.get("PrimaryHex", "#000000"))
                 st.session_state["h_car"] = html
                 display_html_preview(html)
 
 def render_supplier_admin():
     st.title("⚙️ Supplier Admin")
-    # ... (Rest of original Admin code)
-
+    # ... Keep your existing implementation
 def render_client_admin():
     st.title("👥 Client Admin")
-    # ... (Rest of original Admin code)
+    # ... Keep your existing implementation
 
-# --- ROUTER ---
+# ==========================================
+# 6. ROUTING
+# ==========================================
 if "active_module" not in st.session_state: st.session_state["active_module"] = "📋 Master Log"
-if st.button("📋 Master Log"): st.session_state["active_module"] = "📋 Master Log"
-if st.button("📦 Master Tracker"): st.session_state["active_module"] = "📦 Master Tracker"
 
+col_nav1, col_nav2, col_nav3, col_nav4 = st.columns(4)
+if col_nav1.button("📋 Master Log"): st.session_state["active_module"] = "📋 Master Log"
+if col_nav2.button("📦 Master Tracker"): st.session_state["active_module"] = "📦 Master Tracker"
+if col_nav3.button("⚙️ Supplier Admin"): st.session_state["active_module"] = "⚙️ Supplier Admin"
+if col_nav4.button("👥 Client Admin"): st.session_state["active_module"] = "👥 Client Admin"
+
+st.write("---")
+# Shell creation and selection logic here...
 if st.session_state["active_module"] == "📋 Master Log": render_master_log()
 elif st.session_state["active_module"] == "📦 Master Tracker": render_admin_tracker()
+elif st.session_state["active_module"] == "⚙️ Supplier Admin": render_supplier_admin()
+elif st.session_state["active_module"] == "👥 Client Admin": render_client_admin()
