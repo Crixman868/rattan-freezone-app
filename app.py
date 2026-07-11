@@ -25,7 +25,7 @@ def to_decimal(val):
     except: return Decimal('0.00')
 
 def safe_qty_parse(val):
-    """The Defensive Parser Fix"""
+    """FIX: Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
@@ -151,7 +151,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
-            # FIXED: Safe Parsing
+            # FIXED: Defensive parsing applied here
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
@@ -174,16 +174,13 @@ def display_html_preview(raw_html):
 
 # --- VIEWS ---
 def render_master_log():
-    st.title("🗄️ Master Log: Logistics Control Tower")
+    st.title("🗄️ Master Log")
     df = load_log_data()
-    if df.empty: st.info("No logs found.")
     for idx, row in df.iterrows():
-        if st.expander(f"INV: {row.get('Invoice No')} | {row.get('Client Name')}"):
-            st.write(row)
-            if st.button("💾 Save", key=f"save_{idx}"): st.rerun()
+        if st.expander(f"INV: {row.get('Invoice No')}"): st.write(row)
 
 def render_admin_tracker():
-    st.title("📦 Command Console: Master Tracker")
+    st.title("📦 Master Tracker")
     active_shell_uid = st.session_state.get("active_shell_uid", "")
     if not active_shell_uid: st.warning("Select Workspace."); return
     
@@ -193,11 +190,10 @@ def render_admin_tracker():
     # HYDRATION FIX: Helper to remember data
     def get_val(key, default=""): return row_data.get(key, default)
     
-    col1, col2 = st.columns([1, 1.3])
+    col1, col2 = st.columns(2)
     with col1:
-        invoice_num = st.text_input("Invoice Number", value=get_val("Invoice No"))
+        invoice_num = st.text_input("Invoice #", value=get_val("Invoice No"))
         invoice_date = st.text_input("Date", value=get_val("ETA", datetime.now().strftime("%Y-%m-%d")))
-        # ... (Include all other fields using get_val)
     with col2:
         orientation = st.radio("Orientation", ["portrait", "landscape"], index=1)
         if st.button("Preview CARICOM"):
