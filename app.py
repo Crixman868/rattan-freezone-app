@@ -2,20 +2,18 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import os
-pd.options.mode.string_storage = "python"
+pd.options.mode.string_storage = "python"  # <-- PREVENTS PYARROW LINUX SEGFAULT
 import base64
 import gspread
 import json
 import jinja2
 import re
 import tempfile
-from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
 from googleapiclient.http import MediaFileUpload
-from weasyprint import HTML
 
 # ==========================================
 # 1. GLOBAL SETUP & CSS
@@ -25,17 +23,17 @@ st.set_page_config(page_title="Meridian Command Console", page_icon="📦", layo
 COMPANY_LOGO_PATH = "company_logo.png"
 
 def to_decimal(val):
-    """Sanitizes and converts to Decimal for accounting precision."""
+    """Sanitizes and converts to standard float to prevent PyArrow serialization crashes."""
     try:
         if isinstance(val, (int, float)):
-            return Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        clean_val = re.sub(r'[^\d.]', '', str(val))
-        return Decimal(clean_val).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            return round(float(val), 2)
+        clean_val = re.sub(r'[^\d.-]', '', str(val))
+        return round(float(clean_val), 2)
     except:
-        return Decimal('0.00')
+        return 0.00
 
 def safe_qty_parse(val):
-    """FIXED: Defensive parsing to prevent crashes."""
+    """Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
@@ -123,13 +121,15 @@ def get_drive_service():
 def load_log_data():
     try: 
         ws = get_gspread_client().open_by_url(SHEET_URL).sheet1
-        records = ws.get_all_records()
-        if not records:
+        rows = ws.get_all_values()
+        
+        if not rows or len(rows) < 2:
             return pd.DataFrame(columns=LOG_COLUMNS)
         
-        df = pd.DataFrame(records)
-        for col in df.columns:
-            df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
+        headers = rows[0]
+        data = rows[1:]
+        
+        df = pd.DataFrame(data, columns=headers, dtype=object)
         
         for col in LOG_COLUMNS:
             if col not in df.columns:
@@ -160,6 +160,9 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
+        # PURE PYTHON PDF ENGINE - NO LINUX SEGFAULTS
+        from xhtml2pdf import pisa 
+        
         drive = get_drive_service()
         safe_client_name = str(client_name).replace("'", "\\'")
         safe_invoice_no = str(invoice_no).replace("'", "\\'")
@@ -173,7 +176,14 @@ def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
             temp_pdf_path = temp_pdf.name
             
-        HTML(string=html_content).write_pdf(temp_pdf_path)
+        with open(temp_pdf_path, "w+b") as result_file:
+            pisa_status = pisa.CreatePDF(html_content, dest=result_file)
+            
+        if pisa_status.err:
+            st.error(f"PDF generation error for {file_name}")
+            if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
+            return "Upload Failed"
+        
         pdf_media = MediaFileUpload(temp_pdf_path, mimetype='application/pdf', resumable=True)
         
         existing_files = drive.files().list(q=f"name='{file_name}' and '{inv_folder_id}' in parents and trashed=false", fields="files(id, webViewLink)").execute().get('files', [])
@@ -185,7 +195,7 @@ def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no)
             pdf_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             final_pdf = drive.files().create(body=pdf_metadata, media_body=pdf_media, fields='id, webViewLink').execute()
         
-        os.remove(temp_pdf_path)
+        if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
         return final_pdf.get('webViewLink', 'Upload Failed')
     except Exception as e:
         st.error(f"PDF Engine Error for {file_name}: {e}")
@@ -220,7 +230,7 @@ def upload_physical_file_to_drive(uploaded_file, file_name, client_name, invoice
             file_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             file = drive.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        os.remove(temp_path)
+        if os.path.exists(temp_path): os.remove(temp_path)
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"Drive Upload Error: {e}")
@@ -293,12 +303,12 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
         sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -545,29 +555,31 @@ def render_admin_tracker():
         st.subheader("Targeted Document Generation (Save Independently)")
         
         df_clean = pd.DataFrame(columns=["Description", "Qty", "UnitPrice", "Total Foreign (USD)"])
-        subtotal_foreign = Decimal('0.00')
+        subtotal_foreign = 0.00
         freight_dec = to_decimal(freight_cost)
-        ex_rate = to_decimal(exchange_rate)
+        ex_rate = float(exchange_rate)
         
-        duty_dict = {'exchange_rate': ex_rate, 'convert_to_ttd': Decimal('0.00'), 'duty_owed': Decimal('0.00'), 'vat_owed': Decimal('0.00'), 'fixed_fees': to_decimal(ces_fee) + to_decimal(uf_fee), 'grand_total_ttd': Decimal('0.00')}
+        duty_dict = {'exchange_rate': ex_rate, 'convert_to_ttd': 0.00, 'duty_owed': 0.00, 'vat_owed': 0.00, 'fixed_fees': float(ces_fee) + float(uf_fee), 'grand_total_ttd': 0.00}
         
         if uploaded_file and map_description != "-- Select --" and map_qty != "-- Select --" and map_price != "-- Select --":
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
             
+            # STRICT TYPE CASTING TO PREVENT PYARROW C++ CRASHES
+            df_clean["Description"] = df_clean["Description"].astype(str)
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
             
-            df_clean["Total Foreign (USD)"] = df_clean.apply(lambda x: to_decimal(Decimal(x['Qty']) * x['UnitPrice']), axis=1)
-            subtotal_foreign = df_clean["Total Foreign (USD)"].sum()
+            df_clean["Total Foreign (USD)"] = df_clean.apply(lambda x: round(float(x['Qty']) * x['UnitPrice'], 2), axis=1)
+            subtotal_foreign = float(df_clean["Total Foreign (USD)"].sum())
             
-            convert_to_ttd = (subtotal_foreign + freight_dec) * ex_rate
-            duty_owed = (convert_to_ttd * (to_decimal(duty_percentage) / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            vat_owed = ((convert_to_ttd + duty_owed) * (to_decimal(vat_percentage) / Decimal('100'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            convert_to_ttd = round((subtotal_foreign + freight_dec) * ex_rate, 2)
+            duty_owed = round(convert_to_ttd * (float(duty_percentage) / 100.0), 2)
+            vat_owed = round((convert_to_ttd + duty_owed) * (float(vat_percentage) / 100.0), 2)
             
-            ces_fee_dec = to_decimal(ces_fee)
-            uf_fee_dec = to_decimal(uf_fee)
-            grand_total_ttd = duty_owed + vat_owed + ces_fee_dec + uf_fee_dec
+            ces_fee_dec = float(ces_fee)
+            uf_fee_dec = float(uf_fee)
+            grand_total_ttd = round(duty_owed + vat_owed + ces_fee_dec + uf_fee_dec, 2)
             
             duty_dict = {
                 'exchange_rate': ex_rate, 
@@ -581,8 +593,12 @@ def render_admin_tracker():
             file_state_hash = f"{uploaded_file.name}_{supplier_name}_{client_name}"
             if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
                 st.session_state["active_file_hash"] = file_state_hash
+                
+                # STRICTLY TYPE THE EDITOR DATAFRAME TO PREVENT STREAMLIT SEGFAULT
                 base_pck_df = df_raw[[map_description, map_qty]].dropna().copy()
                 base_pck_df.columns = ["SPECIFICATION OF COMMODITIES", "QUANTITY"]
+                base_pck_df["SPECIFICATION OF COMMODITIES"] = base_pck_df["SPECIFICATION OF COMMODITIES"].astype(str)
+                base_pck_df["QUANTITY"] = pd.to_numeric(base_pck_df["QUANTITY"], errors='coerce').fillna(0).astype(int)
                 base_pck_df["TOTAL CTNS"] = 0
                 st.session_state["pck_working_df"] = base_pck_df
 
