@@ -13,6 +13,7 @@ from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
+from google.oauth2 import service_account
 from googleapiclient.http import MediaFileUpload
 from weasyprint import HTML
 
@@ -34,14 +35,12 @@ def to_decimal(val):
         return Decimal('0.00')
 
 def safe_qty_parse(val):
-    """Defensive parsing to prevent layout and calculation crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
         if not val_str or val_str.lower() in ['nan', 'none', 'n/a']: return 0
         return int(float(val_str))
-    except:
-        return 0
+    except: return 0
 
 st.markdown("""
 <style>
@@ -290,9 +289,9 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
         img_tag = f'<img src="{logo_path}" style="height: 40px; display: inline-block;">' if logo_path else ''
-        sig_tag = f'<div class="signature-frame"><img src="{sig_path}" style="height: 40px; display: inline-block;"></div>' if sig_path else '<div class="signature-frame" style="height: 40px;"></div>'
+        sig_tag = f'<img src="{sig_path}" style="height: 40px; display: inline-block;">' if sig_path else ''
         
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<b>{signatory_position}</b></div></body></html>'
+        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
@@ -341,7 +340,6 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
 def display_html_preview(raw_html):
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
     components.html(preview_html, height=750, scrolling=True)
-
 
 # ==========================================
 # 5. APP VIEWS (THE "PAGES")
@@ -447,6 +445,7 @@ def render_admin_tracker():
         return
 
     df_current = load_log_data()
+    
     match_row = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
