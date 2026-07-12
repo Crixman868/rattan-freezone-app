@@ -95,7 +95,6 @@ SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List
 EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
-# ADDED NEW COLUMNS: "B/L Number", "Freight", AND "Cargo Notes"
 LOG_COLUMNS = [
     "Row_UID", "Invoice No", "Client Name", "Container #", "Country of Origin", "ETA", 
     "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", "B/L Number", "Freight", "Cargo Notes",
@@ -288,21 +287,23 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
-            # FIXED: Defensive parser prevents ValueError crashes
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        # FIXED: Safe, crash-free HTML dimensions (No CSS)
-        img_tag = f'<img src="{logo_path}" width="150" height="50">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" width="150" height="80">' if sig_path else ''
+        # LOCKED SCALING FIX: `@page` ensures it renders as 8.5x11 PDF. Explicit height locks image aspect ratio.
+        pdf_head = "<head><style>@page { size: letter portrait; margin: 0.5in; } body { font-family: sans-serif; font-size: 11px; }</style></head>"
+        img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
+        return f'<html>{pdf_head}<body><table width="100%" border="0"><tr><td align="left">{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><table width="100%" border="0"><tr><td align="right">{sig_tag}<br><b>{signatory_position}</b></td></tr></table></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
-        # FIXED: Safe, crash-free HTML dimensions (No CSS)
-        img_tag = f'<img src="{logo_path}" width="150" height="50">' if logo_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
+        # LOCKED SCALING FIX
+        pdf_head = "<head><style>@page { size: letter portrait; margin: 0.5in; } body { font-family: sans-serif; font-size: 13px; }</style></head>"
+        img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
+        
+        return f'<html>{pdf_head}<body><table width="100%" border="0"><tr><td align="left">{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9" align="center"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
