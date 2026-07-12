@@ -269,186 +269,18 @@ def save_supplier_mapping(supplier, desc, qty, price):
 # 4. DOCUMENT GENERATORS
 # ==========================================
 
-# --- NEW STANDALONE CARICOM MODULE ---
-def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path):
-    decl = "CARICOM COMMON MARKET DECLARATION:<br>The undermentioned exporter hereby declares that the cargo specified in this commercial invoice manifest has been produced completely within the parameters of the common market rules of origin. All values and freight indices specified herein match active terminal data profiles perfectly."
-    
-    img_tag = f'<img src="{logo_path}" style="max-height: 50px; max-width: 120px; display: block;">' if logo_path else ''
-    
-    # == THE SURGICAL FIX FOR THE CARICOM SIGNATURE ==
-    sig_tag = f'<img src="{sig_path}" style="height: 150px; max-width: 100%; object-fit: contain; mix-blend-mode: multiply; filter: brightness(1.05) contrast(1.2); display: block;">' if sig_path else ''
-    
-    html = f"""
-    <html>
-    <head>
-        <style>
-            @page {{ size: letter landscape; margin: 0.35in; }}
-            body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #111; line-height: 1.3; }}
-            .header-master {{ width: 100%; border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 12px; border-collapse: collapse; }}
-            .brand-title {{ font-size: 18px; font-weight: 800; text-transform: uppercase; margin: 0 0 2px 0; }}
-            .meta-title {{ font-size: 16px; font-weight: bold; text-transform: uppercase; margin: 0 0 5px 0; letter-spacing: 1px; }}
-            .section-label {{ font-size: 9px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; margin-bottom: 4px; letter-spacing: 0.5px; }}
-            table.grid {{ width: 100%; border-collapse: collapse; margin-bottom: 12px; }}
-            table.grid th {{ background-color: #f4f4f4; border: 1px solid #111; font-size: 9px; text-transform: uppercase; padding: 6px 8px; text-align: left; }}
-            table.grid td {{ border: 1px solid #111; padding: 6px 8px; font-size: 10px; font-weight: bold; }}
-            table.manifest {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; }}
-            table.manifest th {{ background-color: #fff; border-top: 2px solid #111; border-bottom: 1px solid #111; font-size: 9.5px; text-transform: uppercase; padding: 6px 8px; text-align: left; }}
-            table.manifest td {{ border-bottom: 1px solid #e0e0e0; padding: 6px 8px; font-size: 10.5px; vertical-align: middle; }}
-            .footer-table {{ width: 100%; border-collapse: collapse; margin-top: 10px; page-break-inside: avoid; }}
-            .declaration-box {{ border: 1px solid #111; padding: 8px 10px; font-size: 8.5px; text-align: justify; color: #333; }}
-            .totals-table {{ width: 100%; border-collapse: collapse; }}
-            .totals-table td {{ padding: 6px 10px; font-size: 11px; border-bottom: 1px solid #e0e0e0; text-align: right; }}
-            .totals-table .total-row td {{ font-weight: bold; font-size: 13px; border-top: 2px solid #111; border-bottom: 2px solid #111; background-color: #fff; }}
-            
-            /* == THE SURGICAL FIX FOR THE CARICOM SIGNATURE HEIGHT == */
-            .signature-frame {{ height: 150px; border-bottom: 1px solid #111; width: 200px; margin-bottom: 4px; vertical-align: bottom; }}
-        </style>
-    </head>
-    <body>
+def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path, orientation, primary_hex):
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
+    template = env.get_template("caricom_template.html")
+    return template.render(
+        inv_num=inv_num, date=date, client_name=client_name, client_address=client_address,
+        supplier_name=supplier_name, supplier_address=supplier_address, bl=bl, total_ctns=total_ctns,
+        subtotal=f"{subtotal:,.2f}", freight=f"{freight:,.2f}", grand_total=f"{grand_total:,.2f}", 
+        payment_terms=payment_terms, additional_notes=additional_notes, 
+        signatory_position=signatory_position, compliance_data=compliance_data, 
+        logo_path=logo_path, sig_path=sig_path, orientation=orientation, primary_hex=primary_hex
+    )
 
-        <table class="header-master">
-            <tr>
-                <td style="width: 70%; vertical-align: middle;">
-                    <table style="width: auto; border-collapse: collapse;">
-                        <tr>
-                            <td style="width: 130px; vertical-align: middle; padding-right: 15px;">
-                                {img_tag}
-                            </td>
-                            <td style="vertical-align: middle;">
-                                <div class="brand-title">{supplier_name}</div>
-                                <div style="font-size: 10px; color: #333;">{supplier_address}</div>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-                <td style="width: 30%; text-align: right; vertical-align: bottom;">
-                    <div class="meta-title">CARICOM INVOICE</div>
-                    <div style="font-size: 10px; color: #111;">
-                        <strong>REF NO:</strong> {inv_num}<br>
-                        <strong>DATE:</strong> {date}
-                    </div>
-                </td>
-            </tr>
-        </table>
-
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
-            <tr>
-                <td style="width: 50%; border: 1px solid #111; padding: 8px 10px;">
-                    <div class="section-label">EXPORTER / SHIPPER</div>
-                    <div style="font-size: 10.5px; line-height: 1.4;">
-                        <strong>{supplier_name}</strong><br>
-                        {supplier_address}
-                    </div>
-                </td>
-                <td style="width: 50%; border: 1px solid #111; padding: 8px 10px; border-left: none;">
-                    <div class="section-label">CONSIGNEE / IMPORTER</div>
-                    <div style="font-size: 10.5px; line-height: 1.4;">
-                        <strong>{client_name}</strong><br>
-                        {client_address}
-                    </div>
-                </td>
-            </tr>
-        </table>
-
-        <table class="grid">
-            <tr>
-                <th>INVOICE NO.</th>
-                <th>DATE</th>
-                <th>CUSTOMER'S ORDER NO.</th>
-                <th>TRANSPORT MODE</th>
-            </tr>
-            <tr>
-                <td>{inv_num}</td>
-                <td>{date}</td>
-                <td>{compliance_data.get('cust_order_no', '')}</td>
-                <td>{compliance_data.get('mode_transport', '')}</td>
-            </tr>
-        </table>
-
-        <table class="grid">
-            <tr>
-                <th>COUNTRY OF ORIGIN</th>
-                <th>PORT OF LOADING</th>
-                <th>PORT OF DISCHARGE</th>
-                <th>FINAL DESTINATION</th>
-            </tr>
-            <tr>
-                <td>{compliance_data.get('country_origin', '')}</td>
-                <td>{compliance_data.get('port_loading', '')}</td>
-                <td>{compliance_data.get('port_discharge', '')}</td>
-                <td>{compliance_data.get('final_dest', '')}</td>
-            </tr>
-        </table>
-
-        <table class="grid">
-            <tr>
-                <th>BILL OF LADING (B/L#)</th>
-                <th>TOTAL VOLUME ALLOCATION</th>
-                <th>PAYMENT OPERATIONS TERMS</th>
-            </tr>
-            <tr>
-                <td>{bl}</td>
-                <td>{total_ctns} CTNS</td>
-                <td>{payment_terms}</td>
-            </tr>
-        </table>
-
-        <table class="manifest">
-            <tr>
-                <th style="width: 60%;">SPECIFICATION OF COMMODITIES / CARGO DESCRIPTION</th>
-                <th style="text-align: center; width: 15%;">QUANTITY COUNT</th>
-                <th style="text-align: right; width: 10%;">UNIT PRICE (USD)</th>
-                <th style="text-align: right; width: 15%;">TOTAL VALUE (USD)</th>
-            </tr>
-            <tr>
-                <td style="font-weight: bold;">{additional_notes} as per invoice # {inv_num}, dated: {date}</td>
-                <td style="text-align: center;"></td>
-                <td style="text-align: right;"></td>
-                <td style="text-align: right; font-weight: bold;">${subtotal:,.2f}</td>
-            </tr>
-        </table>
-
-        <table class="footer-table">
-            <tr>
-                <td style="width: 60%; padding-right: 20px; vertical-align: top;">
-                    <div class="declaration-box">
-                        <strong>{decl}</strong>
-                    </div>
-                    
-                    <div style="margin-top: 15px;">
-                        <div style="font-size: 8px; color: #111; text-transform: uppercase; font-weight: bold;">AUTHORIZED VENDOR AUTHENTICATION SIGNATURE</div>
-                        <div class="signature-frame">
-                            {sig_tag}
-                        </div>
-                        <div style="font-size: 9px; font-weight: bold; color: #111; margin-top: 2px;">{signatory_position}</div>
-                    </div>
-                </td>
-                
-                <td style="width: 40%; vertical-align: top;">
-                    <table class="totals-table">
-                        <tr>
-                            <td style="text-align: left;">Merchandise Subtotal:</td>
-                            <td><strong>${subtotal:,.2f}</strong></td>
-                        </tr>
-                        <tr>
-                            <td style="text-align: left;">Ocean Freight Charges:</td>
-                            <td>${freight:,.2f}</td>
-                        </tr>
-                        <tr class="total-row">
-                            <td style="text-align: left;">INVOICE TOTAL CF:</td>
-                            <td>${grand_total:,.2f} USD</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-
-    </body>
-    </html>
-    """
-    return html
-
-# --- ORIGINAL HTML GENERATOR FOR STANDARD INVOICE / DUTIES / PACKING ---
 def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_profile, bl, total_ctns, df, total_val, freight=None, additional_notes="", payment_terms="", signatory_position="", is_packing=False, is_duties=False, duty_data=None):
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
@@ -456,17 +288,20 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
+            # FIXED: Defensive parser prevents ValueError crashes
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
-        # FIXED: Segfault-proof image sizing using safe HTML width attributes
-        img_tag = f'<img src="{logo_path}" width="150">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" width="200">' if sig_path else ''
+        
+        # FIXED: Safe, crash-free HTML dimensions (No CSS)
+        img_tag = f'<img src="{logo_path}" width="150" height="50">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" width="150" height="80">' if sig_path else ''
+        
         rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
-        # FIXED: Segfault-proof image sizing using safe HTML width attributes
-        img_tag = f'<img src="{logo_path}" width="150">' if logo_path else ''
+        # FIXED: Safe, crash-free HTML dimensions (No CSS)
+        img_tag = f'<img src="{logo_path}" width="150" height="50">' if logo_path else ''
         rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
@@ -483,7 +318,6 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             desc = str(row["Description"])[:250]
             parsed_qty = safe_qty_parse(row.get('Qty', 0))
             qty = f"{parsed_qty:,}" if parsed_qty else ""
-            
             try:
                 price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
             except ValueError:
@@ -623,7 +457,6 @@ def render_admin_tracker():
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
 
-    # ADDED Cargo Notes to SYNC FUNCTION
     def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, date, bl_num, freight_val, cargo_notes):
         df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
         matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
@@ -703,7 +536,6 @@ def render_admin_tracker():
             exchange_rate = st.number_input("Exchange Rate", value=6.77967, format="%.5f")
             signatory_position = st.text_input("Signatory Position", value="Authorized Director")
             
-        # FIXED: Hydration applied to Cargo Notes
         additional_notes = st.text_area("Cargo Notes", value=get_val("Cargo Notes", "Assorted cargo bulk manifest"))
 
         st.markdown("#### Tariff Tax Parameters")
@@ -770,7 +602,6 @@ def render_admin_tracker():
                     with st.spinner("Locking Commercial Invoice PDF to Drive Vault..."):
                         inv_link = upload_system_pdf_to_drive(st.session_state["h_inv"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Commercial_Invoice.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        # SYNC INCLUDES CARGO NOTES
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Commercial Invoice"] = inv_link
@@ -778,6 +609,8 @@ def render_admin_tracker():
                         st.success("✅ Commercial Invoice locked!")
                 
         with t_car:
+            orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
+            
             with st.expander("📝 Customs Compliance Details (CARICOM)", expanded=True):
                 cc1, cc2 = st.columns(2)
                 cust_order_no = cc1.text_input("Customer's Order No.")
@@ -805,7 +638,7 @@ def render_admin_tracker():
                     supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, 
                     subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, 
                     payment_terms, additional_notes, signatory_position, comp_data, 
-                    logo_path, sig_path
+                    logo_path, sig_path, orientation, supplier_profile.get("PrimaryHex", "#000000")
                 )
             
             if "h_car" in st.session_state: 
@@ -818,12 +651,11 @@ def render_admin_tracker():
                             supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, 
                             subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, 
                             payment_terms, additional_notes, signatory_position, comp_data, 
-                            logo_path, sig_path
+                            logo_path, sig_path, orientation, supplier_profile.get("PrimaryHex", "#000000")
                         )
                         link = upload_system_pdf_to_drive(html_car_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_CARICOM.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         
                         df_update = load_log_data()
-                        # SYNC INCLUDES CARGO NOTES
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "CARICOM Invoice"] = link
@@ -863,7 +695,6 @@ def render_admin_tracker():
                     with st.spinner("Locking Packing Manifest PDF to Drive Vault..."):
                         pck_link = upload_system_pdf_to_drive(st.session_state["h_pck"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Sequential_Packing_List.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        # SYNC INCLUDES CARGO NOTES
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Sequential Packing List"] = pck_link
@@ -880,7 +711,6 @@ def render_admin_tracker():
                     with st.spinner("Locking Customs Summary PDF to Drive Vault..."):
                         dut_link = upload_system_pdf_to_drive(st.session_state["h_dut"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Official_Duties.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        # SYNC INCLUDES CARGO NOTES
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Official Duties Assessment"] = dut_link
