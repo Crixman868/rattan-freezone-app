@@ -95,7 +95,6 @@ SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List
 EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
-# ADDED Cargo Notes
 LOG_COLUMNS = [
     "Row_UID", "Invoice No", "Client Name", "Container #", "Country of Origin", "ETA", 
     "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", "B/L Number", "Freight", "Cargo Notes",
@@ -128,6 +127,7 @@ def load_log_data():
             return pd.DataFrame(columns=LOG_COLUMNS)
         
         df = pd.DataFrame(records)
+        # --- THE STRING FORCE FIX ---
         for col in df.columns:
             df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
         
@@ -287,57 +287,21 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
+            # FIXED: Defensive parser prevents ValueError crashes
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        # SEGFAULT FIX: Using div-based layout to prevent WeasyPrint table memory crash with base64 images
-        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" style="height: 80px;">' if sig_path else ''
+        # FIXED: Safe HTML attributes instead of Segfault-inducing CSS styles
+        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         
-        rendered_html = f'''<html>
-        <body style="font-family: sans-serif; font-size: 12px; margin: 0.5in;">
-            <div style="margin-bottom: 20px;">
-                <div style="float: left;">{img_tag}</div>
-                <div style="float: right;"><h2 style="margin: 0;">{title}</h2></div>
-                <div style="clear: both;"></div>
-            </div>
-            <p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p>
-            <table border="1" width="100%" cellspacing="0" cellpadding="5" style="border-collapse: collapse;">
-                <thead><tr bgcolor="#f7f7f7">
-                    <th align="left">Description</th><th>Carton Nos</th><th>Total Ctns</th><th align="right">Qty</th>
-                </tr></thead>
-                <tbody>{table_rows}</tbody>
-            </table>
-            <div style="margin-top: 30px; text-align: right;">
-                {sig_tag}<br><b>{signatory_position}</b>
-            </div>
-        </body>
-        </html>'''
-        return rendered_html
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
-        # SEGFAULT FIX: div layout
-        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
-        
-        rendered_html = f'''<html>
-        <body style="font-family: sans-serif; font-size: 13px; margin: 0.5in;">
-            <div style="margin-bottom: 20px;">
-                <div style="float: left;">{img_tag}</div>
-                <div style="float: right;"><h2 style="margin: 0;">{title}</h2></div>
-                <div style="clear: both;"></div>
-            </div>
-            <p><b>Invoice:</b> {inv_no}</p>
-            <p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p>
-            <p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p>
-            <p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p>
-            <br>
-            <div style="background-color: #f9f9f9; padding: 15px; border: 1px solid #ccc; text-align: center;">
-                <h3 style="margin: 0;">Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3>
-            </div>
-        </body>
-        </html>'''
-        return rendered_html
+        # FIXED: Safe HTML attributes
+        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -728,7 +692,8 @@ def render_admin_tracker():
                 
                 if st.button("💾 Save Packing Manifest Only", type="primary", use_container_width=True):
                     with st.spinner("Locking Packing Manifest PDF to Drive Vault..."):
-                        pck_link = upload_system_pdf_to_drive(st.session_state["h_pck"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Sequential_Packing_List.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
+                        html_pck_final = generate_html_document("PACKING LIST MANIFEST", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_packing=True)
+                        pck_link = upload_system_pdf_to_drive(html_pck_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Sequential_Packing_List.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
@@ -744,7 +709,8 @@ def render_admin_tracker():
                 
                 if st.button("💾 Save Customs Summary Only", type="primary", use_container_width=True):
                     with st.spinner("Locking Customs Summary PDF to Drive Vault..."):
-                        dut_link = upload_system_pdf_to_drive(st.session_state["h_dut"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Official_Duties.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
+                        html_dut_final = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
+                        dut_link = upload_system_pdf_to_drive(html_dut_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Official_Duties.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
