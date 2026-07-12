@@ -158,8 +158,8 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
-        # --- LAZY IMPORT PREVENTS STREAMLIT CLOUD LINUX SEGFAULT ---
-        from weasyprint import HTML 
+        # --- PURE PYTHON PDF GENERATION (NO SEGFAULTS POSSIBLE) ---
+        from xhtml2pdf import pisa 
         
         drive = get_drive_service()
         safe_client_name = str(client_name).replace("'", "\\'")
@@ -174,7 +174,14 @@ def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
             temp_pdf_path = temp_pdf.name
             
-        HTML(string=html_content).write_pdf(temp_pdf_path)
+        with open(temp_pdf_path, "w+b") as result_file:
+            pisa_status = pisa.CreatePDF(html_content, dest=result_file)
+            
+        if pisa_status.err:
+            st.error(f"PDF generation error for {file_name}")
+            if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
+            return "Upload Failed"
+        
         pdf_media = MediaFileUpload(temp_pdf_path, mimetype='application/pdf', resumable=True)
         
         existing_files = drive.files().list(q=f"name='{file_name}' and '{inv_folder_id}' in parents and trashed=false", fields="files(id, webViewLink)").execute().get('files', [])
@@ -186,7 +193,7 @@ def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no)
             pdf_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             final_pdf = drive.files().create(body=pdf_metadata, media_body=pdf_media, fields='id, webViewLink').execute()
         
-        os.remove(temp_pdf_path)
+        if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
         return final_pdf.get('webViewLink', 'Upload Failed')
     except Exception as e:
         st.error(f"PDF Engine Error for {file_name}: {e}")
@@ -221,7 +228,7 @@ def upload_physical_file_to_drive(uploaded_file, file_name, client_name, invoice
             file_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             file = drive.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        os.remove(temp_path)
+        if os.path.exists(temp_path): os.remove(temp_path)
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"Drive Upload Error: {e}")
