@@ -1,8 +1,7 @@
-import faulthandler
-faulthandler.enable()
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+pd.options.mode.string_storage = "python"  # <-- PREVENTS PYARROW LINUX SEGFAULT
 import os
 import base64
 import gspread
@@ -123,13 +122,15 @@ def get_drive_service():
 def load_log_data():
     try: 
         ws = get_gspread_client().open_by_url(SHEET_URL).sheet1
-        records = ws.get_all_records()
-        if not records:
+        rows = ws.get_all_values()  # Pulls clean string matrices to bypass PyArrow crashes
+        
+        if not rows or len(rows) < 2:
             return pd.DataFrame(columns=LOG_COLUMNS)
         
-        df = pd.DataFrame(records)
-        for col in df.columns:
-            df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
+        headers = rows[0]
+        data = rows[1:]
+        
+        df = pd.DataFrame(data, columns=headers, dtype=object)
         
         for col in LOG_COLUMNS:
             if col not in df.columns:
