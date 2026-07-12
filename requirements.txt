@@ -6,3 +6,5 @@ google-auth
 openpyxl
 weasyprint
 extra-streamlit-components
+cffi
+wheel
