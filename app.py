@@ -283,58 +283,59 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
 
-    # FIXED: CSS explicitly instructing WeasyPrint on how to render pages safely
-    pdf_css = """
-    <head>
-        <style>
-            @page { size: letter portrait; margin: 0.5in; }
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; font-size: 12px; line-height: 1.4; }
-            h2 { color: #111; text-transform: uppercase; margin: 0; font-size: 18px; letter-spacing: 1px; }
-            .layout-table { width: 100%; border-collapse: collapse; border: none; margin-bottom: 20px; }
-            .layout-table td { border: none; padding: 0; vertical-align: middle; }
-            .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .data-table th { background-color: #f4f4f4; border: 1px solid #ccc; padding: 8px; text-align: left; font-weight: bold; font-size: 11px; text-transform: uppercase; }
-            .data-table td { border: 1px solid #ccc; padding: 8px; font-size: 11px; }
-            .info-block { margin-bottom: 20px; font-size: 12px; }
-        </style>
-    </head>
-    """
+    # Safe CSS that will not crash WeasyPrint
+    pdf_css = "<style>@page { margin: 0.5in; size: letter portrait; } body { font-family: sans-serif; font-size: 13px; color: #111; }</style>"
 
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
             qty = safe_qty_parse(row.get("QUANTITY", 0))
-            table_rows += f'<tr><td>{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="text-align:right;">{qty:,}</td></tr>'
+            table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        img_tag = f'<img src="{logo_path}" height="45">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" height="70">' if sig_path else ''
+        # Safe HTML image attributes
+        img_tag = f'<img src="{logo_path}" style="max-height: 50px; max-width: 250px;">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" style="max-height: 80px; max-width: 250px;">' if sig_path else ''
         
-        rendered_html = f'''<html>{pdf_css}<body>
-            <table class="layout-table"><tr><td style="width:50%;">{img_tag}</td><td style="width:50%; text-align:right;"><h2>{title}</h2></td></tr></table>
-            <div class="info-block"><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</div>
-            <table class="data-table"><thead><tr><th>Description</th><th style="text-align:center;">Carton Nos</th><th style="text-align:center;">Total Ctns</th><th style="text-align:right;">Qty</th></tr></thead><tbody>{table_rows}</tbody></table>
-            <br><br>
-            <table class="layout-table" style="margin-top:30px;"><tr><td style="text-align:right;">{sig_tag}<br><b>{signatory_position}</b></td></tr></table>
+        rendered_html = f'''<html><head>{pdf_css}</head><body>
+        <table width="100%" style="border:none;" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="border:none; padding:0;">{img_tag}</td>
+                <td align="right" style="border:none; padding:0;"><h2>{title}</h2></td>
+            </tr>
+        </table>
+        <p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p>
+        <table border="1" width="100%" cellspacing="0" cellpadding="8" style="border-collapse: collapse;">
+            <thead><tr bgcolor="#f4f4f4"><th align="left">Description</th><th>Carton Nos</th><th>Total Ctns</th><th align="right">Qty</th></tr></thead>
+            <tbody>{table_rows}</tbody>
+        </table>
+        <br><br>
+        <table width="100%" style="border:none;">
+            <tr><td align="right" style="border:none;">{sig_tag}<br><b>{signatory_position}</b></td></tr>
+        </table>
         </body></html>'''
+        return rendered_html
     
     elif is_duties:
         duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" height="45">' if logo_path else ''
+        img_tag = f'<img src="{logo_path}" style="max-height: 50px; max-width: 250px;">' if logo_path else ''
         
-        rendered_html = f'''<html>{pdf_css}<body>
-            <table class="layout-table"><tr><td style="width:50%;">{img_tag}</td><td style="width:50%; text-align:right;"><h2>{title}</h2></td></tr></table>
-            <div class="info-block" style="font-size:13px;">
-                <p><b>Invoice:</b> {inv_no}</p>
-                <p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p>
-                <p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p>
-                <p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p>
-            </div>
-            <table class="layout-table" style="margin-top:20px;">
-                <tr><td style="background-color:#f9f9f9; padding:20px; border:1px solid #ccc; text-align:center;">
-                    <h3 style="margin:0; font-size:16px;">Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3>
-                </td></tr>
-            </table>
+        rendered_html = f'''<html><head>{pdf_css}</head><body>
+        <table width="100%" style="border:none;" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="border:none; padding:0;">{img_tag}</td>
+                <td align="right" style="border:none; padding:0;"><h2>{title}</h2></td>
+            </tr>
+        </table>
+        <p><b>Invoice:</b> {inv_no}</p>
+        <p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p>
+        <p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p>
+        <p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p>
+        <br>
+        <table border="1" width="100%" cellspacing="0" cellpadding="15" style="border-collapse: collapse;">
+            <tr><td bgcolor="#f9f9f9" align="center"><h3 style="margin:0;">Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr>
+        </table>
         </body></html>'''
+        return rendered_html
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
