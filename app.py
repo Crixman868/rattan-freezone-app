@@ -34,13 +34,14 @@ def to_decimal(val):
         return Decimal('0.00')
 
 def safe_qty_parse(val):
-    """The Nuclear Defensive Parser for garbage spreadsheet data"""
+    """FIXED: Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
         if not val_str or val_str.lower() in ['nan', 'none', 'n/a']: return 0
         return int(float(val_str))
-    except: return 0
+    except:
+        return 0
 
 st.markdown("""
 <style>
@@ -94,9 +95,10 @@ SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List
 EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
+# ADDED NEW COLUMNS: "B/L Number" and "Freight"
 LOG_COLUMNS = [
     "Row_UID", "Invoice No", "Client Name", "Container #", "Country of Origin", "ETA", 
-    "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", 
+    "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", "B/L Number", "Freight",
     "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment", 
     "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", 
     "Other Documents", "Miscellaneous Supporting Doc"
@@ -126,6 +128,7 @@ def load_log_data():
             return pd.DataFrame(columns=LOG_COLUMNS)
         
         df = pd.DataFrame(records)
+        # --- THE STRING FORCE FIX ---
         for col in df.columns:
             df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
         
@@ -266,7 +269,6 @@ def save_supplier_mapping(supplier, desc, qty, price):
 # 4. DOCUMENT GENERATORS
 # ==========================================
 
-# --- NEW STANDALONE CARICOM MODULE ---
 def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path, orientation, primary_hex):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
     template = env.get_template("caricom_template.html")
@@ -279,7 +281,6 @@ def generate_caricom_printout(inv_num, date, client_name, client_address, suppli
         logo_path=logo_path, sig_path=sig_path, orientation=orientation, primary_hex=primary_hex
     )
 
-# --- ORIGINAL HTML GENERATOR FOR STANDARD INVOICE / DUTIES / PACKING ---
 def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_profile, bl, total_ctns, df, total_val, freight=None, additional_notes="", payment_terms="", signatory_position="", is_packing=False, is_duties=False, duty_data=None):
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
@@ -287,18 +288,16 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
-            # --- THE SURGICAL FIX FOR THE PACKING LIST CRASH ---
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
-        
         img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
         sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
+        return f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
         img_tag = f'<img src="{logo_path}" height="50">' if logo_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
+        return f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -312,10 +311,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         items = []
         for idx, row in df.iterrows():
             desc = str(row["Description"])[:250]
-            # --- DEFENSIVE PARSING APPLIED TO STANDARD INVOICE ---
-            parsed_qty = safe_qty_parse(row.get('Qty', 0))
-            qty = f"{parsed_qty:,}" if parsed_qty else ""
-            
+            qty = f"{safe_qty_parse(row.get('Qty', 0)):,}"
             try:
                 price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
             except ValueError:
@@ -389,6 +385,11 @@ def render_master_log():
                 with col5: new_stat = st.selectbox("Shipment Status", ["Active", "Delivered"], index=0 if ship_status != "Delivered" else 1, key=f"stat_{idx}")
                 with col6: new_naldo = st.radio("NALDO Code", ["Yes", "No"], index=0 if naldo_val == "YES" else 1, horizontal=True, key=f"naldo_{idx}")
                 
+                # ADDED NEW ROW FOR B/L Number AND Freight IN MASTER LOG
+                col7, col8 = st.columns(2)
+                with col7: new_bl = st.text_input("B/L Number", value=str(row.get("B/L Number", "")), key=f"bl_{idx}")
+                with col8: new_freight = st.text_input("Freight (USD)", value=str(row.get("Freight", "")), key=f"fr_{idx}")
+
                 st.write("---")
                 st.subheader("Document Vault (10-Slot Matrix)")
                 
@@ -425,6 +426,8 @@ def render_master_log():
                         df_update.at[row_index, "Lodged Status"] = new_lodg
                         df_update.at[row_index, "Shipment Status"] = new_stat
                         df_update.at[row_index, "NALDO"] = new_naldo
+                        df_update.at[row_index, "B/L Number"] = str(new_bl).strip()
+                        df_update.at[row_index, "Freight"] = str(new_freight).strip()
                         
                         for slot_name, up_file in upload_cache.items():
                             doc_filename = f"{inv_no if inv_no.strip() else row_uid}_{slot_name.replace(' ', '_')}.pdf"
@@ -445,12 +448,12 @@ def render_admin_tracker():
 
     df_current = load_log_data()
     
-    # --- HYDRATION FIX ---
     match_row = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
 
-    def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, date):
+    # ADDED bl_num and freight_val TO THE SYNC FUNCTION
+    def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, date, bl_num, freight_val):
         df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
         matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
         
@@ -460,6 +463,8 @@ def render_admin_tracker():
             df_active.at[idx, "Total Cartons"] = str(ctns)
             df_active.at[idx, "ETA"] = str(date)
             df_active.at[idx, "Invoice No"] = str(inv_num).strip()
+            df_active.at[idx, "B/L Number"] = str(bl_num).strip()
+            df_active.at[idx, "Freight"] = str(freight_val).strip()
         else:
             new_row = {col: "" for col in LOG_COLUMNS}
             new_row["Row_UID"] = active_shell_uid.strip()
@@ -468,6 +473,8 @@ def render_admin_tracker():
             new_row["Total Cartons"] = str(ctns)
             new_row["ETA"] = str(date)
             new_row["Shipment Status"] = "Active"
+            new_row["B/L Number"] = str(bl_num).strip()
+            new_row["Freight"] = str(freight_val).strip()
             df_active = pd.concat([df_active, pd.DataFrame([new_row])], ignore_index=True)
         return df_active
 
@@ -482,7 +489,6 @@ def render_admin_tracker():
     with col1:
         st.subheader("Data Intake & Matrix Mapping")
         
-        # Hydrated Client
         client_val = get_val("Client Name", "Select a Client...")
         client_idx = client_options.index(client_val) if client_val in client_options else 0
         client_name = st.selectbox("Client Workspace", client_options, index=client_idx)
@@ -512,16 +518,15 @@ def render_admin_tracker():
         st.markdown("#### Logistics Manifest Fields")
         cx1, cx2 = st.columns(2)
         with cx1:
-            # Hydrated Manifest Fields
             invoice_num = st.text_input("Invoice Number", value=get_val("Invoice No", ""))
             invoice_date = st.text_input("Invoice Date / ETA", value=get_val("ETA", datetime.now().strftime("%Y-%m-%d")))
-            bl_number = st.text_input("Bill of Lading (BL#)", value=get_val("Bill of Lading Scan", ""))
+            # CHANGED: Now pulling from "B/L Number" column instead of "Bill of Lading Scan" link
+            bl_number = st.text_input("Bill of Lading (BL#)", value=get_val("B/L Number", ""))
             payment_terms = st.selectbox("Terms", ["NET 90 Days", "NET 45 Days", "NET 30 Days"])
             special_indicator = st.selectbox("Shipment Type", ["Standard", "Express", "Maritime Direct"])
         with cx2:
-            freight_cost = st.number_input("Ocean Freight (USD)", value=2500.00)
-            
-            # Hydrated Cartons
+            # CHANGED: Now pulling from "Freight" column instead of default 2500
+            freight_cost = st.number_input("Ocean Freight (USD)", value=float(to_decimal(get_val("Freight", 2500.00))))
             carton_val = safe_qty_parse(get_val("Total Cartons", 0))
             container_total_ctns = st.number_input("Total Cartons", value=int(carton_val))
             exchange_rate = st.number_input("Exchange Rate", value=6.77967, format="%.5f")
@@ -550,11 +555,9 @@ def render_admin_tracker():
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
             
-            # --- ACCOUNTING PRECISION LOGIC APPLIED ---
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
             
-            # Line item total MUST be calculated and rounded first before sum
             df_clean["Total Foreign (USD)"] = df_clean.apply(lambda x: to_decimal(Decimal(x['Qty']) * x['UnitPrice']), axis=1)
             subtotal_foreign = df_clean["Total Foreign (USD)"].sum()
             
@@ -595,14 +598,14 @@ def render_admin_tracker():
                     with st.spinner("Locking Commercial Invoice PDF to Drive Vault..."):
                         inv_link = upload_system_pdf_to_drive(st.session_state["h_inv"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Commercial_Invoice.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date)
+                        # UPDATED SYNC ARGUMENTS
+                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Commercial Invoice"] = inv_link
                         save_log_data(df_update)
                         st.success("✅ Commercial Invoice locked!")
                 
         with t_car:
-            # --- ADDED ORIENTATION FOR CARICOM ---
             orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
             
             with st.expander("📝 Customs Compliance Details (CARICOM)", expanded=True):
@@ -650,7 +653,8 @@ def render_admin_tracker():
                         link = upload_system_pdf_to_drive(html_car_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_CARICOM.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         
                         df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date)
+                        # UPDATED SYNC ARGUMENTS
+                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "CARICOM Invoice"] = link
                         save_log_data(df_update)
@@ -689,7 +693,8 @@ def render_admin_tracker():
                     with st.spinner("Locking Packing Manifest PDF to Drive Vault..."):
                         pck_link = upload_system_pdf_to_drive(st.session_state["h_pck"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Sequential_Packing_List.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date)
+                        # UPDATED SYNC ARGUMENTS
+                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Sequential Packing List"] = pck_link
                         save_log_data(df_update)
@@ -705,7 +710,8 @@ def render_admin_tracker():
                     with st.spinner("Locking Customs Summary PDF to Drive Vault..."):
                         dut_link = upload_system_pdf_to_drive(st.session_state["h_dut"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Official_Duties.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
                         df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date)
+                        # UPDATED SYNC ARGUMENTS
+                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Official Duties Assessment"] = dut_link
                         save_log_data(df_update)
@@ -796,6 +802,8 @@ with col_create:
             blank_row["Shipment Status"] = "Active"
             blank_row["NALDO"] = "No"
             blank_row["Lodged Status"] = "No"
+            blank_row["B/L Number"] = ""
+            blank_row["Freight"] = ""
             for doc_slot in ALL_DOCS: blank_row[doc_slot] = "Pending Upload"
             
             df_new = pd.concat([df_current, pd.DataFrame([blank_row])], ignore_index=True)
