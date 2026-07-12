@@ -14,7 +14,6 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
 from googleapiclient.http import MediaFileUpload
-from weasyprint import HTML
 
 # ==========================================
 # 1. GLOBAL SETUP & CSS
@@ -34,7 +33,7 @@ def to_decimal(val):
         return Decimal('0.00')
 
 def safe_qty_parse(val):
-    """FIXED: Defensive parsing to prevent crashes."""
+    """Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
@@ -127,7 +126,6 @@ def load_log_data():
             return pd.DataFrame(columns=LOG_COLUMNS)
         
         df = pd.DataFrame(records)
-        # --- THE STRING FORCE FIX ---
         for col in df.columns:
             df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
         
@@ -160,6 +158,9 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
+        # --- LAZY IMPORT PREVENTS STREAMLIT CLOUD LINUX SEGFAULT ---
+        from weasyprint import HTML 
+        
         drive = get_drive_service()
         safe_client_name = str(client_name).replace("'", "\\'")
         safe_invoice_no = str(invoice_no).replace("'", "\\'")
@@ -287,11 +288,9 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
-            # FIXED: Defensive parser prevents ValueError crashes
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        # FIXED: Safe HTML attributes instead of Segfault-inducing CSS styles
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
         sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         
@@ -299,7 +298,6 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     
     elif is_duties:
         duty_data = duty_data or {}
-        # FIXED: Safe HTML attributes
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
         rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
