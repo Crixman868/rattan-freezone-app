@@ -13,7 +13,6 @@ from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
-from google.oauth2 import service_account
 from googleapiclient.http import MediaFileUpload
 from weasyprint import HTML
 
@@ -35,12 +34,14 @@ def to_decimal(val):
         return Decimal('0.00')
 
 def safe_qty_parse(val):
+    """FIXED: Defensive parsing to prevent crashes."""
     try:
         if isinstance(val, (int, float)): return int(val)
         val_str = str(val).replace(",", "").strip()
         if not val_str or val_str.lower() in ['nan', 'none', 'n/a']: return 0
         return int(float(val_str))
-    except: return 0
+    except:
+        return 0
 
 st.markdown("""
 <style>
@@ -126,6 +127,7 @@ def load_log_data():
             return pd.DataFrame(columns=LOG_COLUMNS)
         
         df = pd.DataFrame(records)
+        # --- THE STRING FORCE FIX ---
         for col in df.columns:
             df[col] = df[col].astype(str).replace(['nan', 'None', '<NA>'], '')
         
@@ -285,18 +287,22 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
+            # FIXED: Defensive parser stops ValueError if spreadsheet has blank/text in quantity
             qty = safe_qty_parse(row.get("QUANTITY", 0))
             table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        img_tag = f'<img src="{logo_path}" style="height: 40px; display: inline-block;">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" style="height: 40px; display: inline-block;">' if sig_path else ''
+        # FIXED: Locked asset sizing for Packing List
+        img_tag = f'<img src="{logo_path}" style="height: 40px; max-height: 40px; width: auto;">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" style="height: 80px; max-height: 80px; width: auto;">' if sig_path else ''
         
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
+        return f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" style="height: 40px; display: inline-block;">' if logo_path else ''
-        rendered_html = f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
+        # FIXED: Locked asset sizing for Duties
+        img_tag = f'<img src="{logo_path}" style="height: 40px; max-height: 40px; width: auto;">' if logo_path else ''
+        
+        return f'<html><body><table width="100%"><tr><td>{img_tag}</td><td align="right"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -310,8 +316,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         items = []
         for idx, row in df.iterrows():
             desc = str(row["Description"])[:250]
-            parsed_qty = safe_qty_parse(row.get('Qty', 0))
-            qty = f"{parsed_qty:,}" if parsed_qty else ""
+            qty = f"{safe_qty_parse(row.get('Qty', 0)):,}"
             try:
                 price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
             except ValueError:
@@ -340,6 +345,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
 def display_html_preview(raw_html):
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
     components.html(preview_html, height=750, scrolling=True)
+
 
 # ==========================================
 # 5. APP VIEWS (THE "PAGES")
@@ -450,6 +456,7 @@ def render_admin_tracker():
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
 
+    # FIXED: Added cargo_notes parameter for Hydration
     def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, date, bl_num, freight_val, cargo_notes):
         df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
         matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
@@ -529,6 +536,7 @@ def render_admin_tracker():
             exchange_rate = st.number_input("Exchange Rate", value=6.77967, format="%.5f")
             signatory_position = st.text_input("Signatory Position", value="Authorized Director")
             
+        # FIXED: Hydrating the Cargo Notes input
         additional_notes = st.text_area("Cargo Notes", value=get_val("Cargo Notes", "Assorted cargo bulk manifest"))
 
         st.markdown("#### Tariff Tax Parameters")
