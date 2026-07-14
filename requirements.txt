@@ -4,5 +4,5 @@ gspread
 google-api-python-client
 google-auth
 openpyxl
-weasyprint
+xhtml2pdf
 extra-streamlit-components
