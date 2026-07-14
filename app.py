@@ -1,8 +1,17 @@
+import subprocess
+import sys
+
+# --- FAILSAFE: FORCE INSTALL MISSING CLOUD DEPENDENCIES ---
+try:
+    from xhtml2pdf import pisa
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "xhtml2pdf"])
+    from xhtml2pdf import pisa
+
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import os
-pd.options.mode.string_storage = "python"  # <-- PREVENTS PYARROW LINUX SEGFAULT
+pd.options.mode.string_storage = "python"  # PREVENTS PYARROW LINUX SEGFAULT
 import base64
 import gspread
 import json
@@ -160,9 +169,6 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
-        # PURE PYTHON PDF ENGINE - NO LINUX SEGFAULTS
-        from xhtml2pdf import pisa 
-        
         drive = get_drive_service()
         safe_client_name = str(client_name).replace("'", "\\'")
         safe_invoice_no = str(invoice_no).replace("'", "\\'")
@@ -350,8 +356,10 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     return rendered_html
 
 def display_html_preview(raw_html):
-    preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
-    components.html(preview_html, height=750, scrolling=True)
+    # FIXED: Replaced deprecated components.html with safe markdown injection
+    clean_html = re.sub(r'</?(html|body|head)[^>]*>', '', raw_html)
+    preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333; height: 750px; overflow-y: auto;">{clean_html}</div>'
+    st.markdown(preview_html, unsafe_allow_html=True)
 
 
 # ==========================================
@@ -515,16 +523,36 @@ def render_admin_tracker():
         map_description, map_qty, map_price = "-- Select --", "-- Select --", "-- Select --"
         
         if uploaded_file is not None:
-            df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-            all_columns = list(df_raw.dropna(how='all').columns)
-            cm1, cm2, cm3 = st.columns(3)
-            with cm1: map_description = st.selectbox("Description Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_desc)+1 if saved_desc in all_columns else 0)
-            with cm2: map_qty = st.selectbox("Quantity Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_qty)+1 if saved_qty in all_columns else 0)
-            with cm3: map_price = st.selectbox("Unit Price Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_price)+1 if saved_price in all_columns else 0)
-            if map_description != "-- Select --" and (map_description != saved_desc or map_qty != saved_qty or map_price != saved_price):
-                if st.button("Save Column Translation Matrix"):
-                    save_supplier_mapping(supplier_name, map_description, map_qty, map_price)
-                    st.success("Matrix Mapped!")
+            try:
+                if uploaded_file.name.endswith('.csv'):
+                    import io
+                    import csv
+                    decoded_file = uploaded_file.getvalue().decode('utf-8', errors='replace')
+                    reader = csv.reader(io.StringIO(decoded_file))
+                    raw_data = list(reader)
+                    if len(raw_data) > 0:
+                        headers = raw_data[0]
+                        data_rows = raw_data[1:]
+                        df_raw = pd.DataFrame(data_rows, columns=headers, dtype=object)
+                    else:
+                        df_raw = pd.DataFrame()
+                else:
+                    df_raw = pd.read_excel(uploaded_file, engine='openpyxl', dtype=object)
+                
+                if not df_raw.empty:
+                    all_columns = list(df_raw.dropna(how='all', axis=1).columns)
+                    cm1, cm2, cm3 = st.columns(3)
+                    with cm1: map_description = st.selectbox("Description Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_desc)+1 if saved_desc in all_columns else 0)
+                    with cm2: map_qty = st.selectbox("Quantity Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_qty)+1 if saved_qty in all_columns else 0)
+                    with cm3: map_price = st.selectbox("Unit Price Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_price)+1 if saved_price in all_columns else 0)
+                    
+                    if map_description != "-- Select --" and (map_description != saved_desc or map_qty != saved_qty or map_price != saved_price):
+                        if st.button("Save Column Translation Matrix"):
+                            save_supplier_mapping(supplier_name, map_description, map_qty, map_price)
+                            st.success("Matrix Mapped!")
+            except Exception as e:
+                st.error(f"Failed to safely parse the file: {e}")
+                df_raw = pd.DataFrame()
 
         st.write("---")
         st.markdown("#### Logistics Manifest Fields")
@@ -565,7 +593,6 @@ def render_admin_tracker():
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
             
-            # STRICT TYPE CASTING TO PREVENT PYARROW C++ CRASHES
             df_clean["Description"] = df_clean["Description"].astype(str)
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
@@ -594,7 +621,6 @@ def render_admin_tracker():
             if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
                 st.session_state["active_file_hash"] = file_state_hash
                 
-                # STRICTLY TYPE THE EDITOR DATAFRAME TO PREVENT STREAMLIT SEGFAULT
                 base_pck_df = df_raw[[map_description, map_qty]].dropna().copy()
                 base_pck_df.columns = ["SPECIFICATION OF COMMODITIES", "QUANTITY"]
                 base_pck_df["SPECIFICATION OF COMMODITIES"] = base_pck_df["SPECIFICATION OF COMMODITIES"].astype(str)
