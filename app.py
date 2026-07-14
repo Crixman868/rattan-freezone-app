@@ -335,10 +335,14 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
 
     if is_packing:
         table_rows = ""
-        for idx, row in df.iterrows():
-            qty = safe_qty_parse(row.get("QUANTITY", 0))
-            table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col">{row.get("CTNS NOS","N/A")}</td><td class="tot-col">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
-        
+        # FAILSAFE: Ensure DataFrame is not empty before iterating
+        if not df.empty:
+            for idx, row in df.iterrows():
+                qty = safe_qty_parse(row.get("QUANTITY", 0))
+                table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col">{row.get("CTNS NOS","N/A")}</td><td class="tot-col">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
+        else:
+            table_rows = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No packing data mapped.</td></tr>'
+
         img_tag = f'<img src="{logo_path}" style="height: 55px; width: auto;">' if logo_path else ''
         sig_tag = f'<img src="{sig_path}" style="height: 70px; width: auto;">' if sig_path else ''
         
@@ -419,20 +423,21 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             template = template_env.from_string("<h1>{{title}}</h1><p><b>Exporter:</b> {{supplier_name}}<br><b>Consignee:</b> {{client_name}}</p><table border='1' width='100%' cellspacing='0' cellpadding='5'><thead><tr bgcolor='#f2f2f2'><th>Description</th><th>Qty</th><th>Total</th></tr></thead><tbody>{% for item in items %}<tr><td>{{item.Description}}</td><td>{{item.Qty}}</td><td>{{item.Total}}</td></tr>{% endfor %}</tbody></table>")
 
         items = []
-        for idx, row in df.iterrows():
-            desc = str(row["Description"])[:250]
-            parsed_qty = safe_qty_parse(row.get('Qty', 0))
-            qty = f"{parsed_qty:,}" if parsed_qty else ""
-            try:
-                price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
-            except ValueError:
-                price = ""
-            try:
-                total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
-            except ValueError:
-                total = ""
-                
-            items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
+        if not df.empty:
+            for idx, row in df.iterrows():
+                desc = str(row["Description"])[:250]
+                parsed_qty = safe_qty_parse(row.get('Qty', 0))
+                qty = f"{parsed_qty:,}" if parsed_qty else ""
+                try:
+                    price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
+                except ValueError:
+                    price = ""
+                try:
+                    total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
+                except ValueError:
+                    total = ""
+                    
+                items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
             
         rendered_html = template.render({
             "title": title, "inv_no": inv_no, "date": date, "client_name": client, 
