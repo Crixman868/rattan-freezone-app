@@ -300,21 +300,100 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
 
+    # STRICT CSS FRAMEWORK FOR XHTML2PDF TO PREVENT WARPED TABLES AND BLOWN-UP IMAGES
+    css = """
+    @page { size: letter portrait; margin: 15mm; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #333333; }
+    h1 { color: #1e293b; font-size: 22pt; margin: 0; text-align: right; text-transform: uppercase; }
+    .header-table { width: 100%; border: none; margin-bottom: 25px; }
+    .info-block { margin-bottom: 20px; line-height: 1.5; }
+    .manifest-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .manifest-table th { background-color: #f8f9fa; border: 1px solid #cbd5e1; padding: 10px; font-weight: bold; text-align: left; }
+    .manifest-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: middle; }
+    .desc-col { width: 55%; text-align: left; }
+    .ctn-col { width: 15%; text-align: center; }
+    .tot-col { width: 15%; text-align: center; }
+    .qty-col { width: 15%; text-align: right; }
+    .signature-block { text-align: right; margin-top: 40px; }
+    """
+
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
             qty = safe_qty_parse(row.get("QUANTITY", 0))
-            table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
+            table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col" style="text-align: center;">{row.get("CTNS NOS","N/A")}</td><td class="tot-col" style="text-align: center;">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
         
-        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
+        # EXPLICIT HEIGHT STYLING REQUIRED BY XHTML2PDF FOR BASE64 IMAGES
+        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" style="height: 80px;">' if sig_path else ''
         
-        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
+        # Format "PACKING LIST MANIFEST" to split onto two lines cleanly
+        title_html = title.replace(" LIST ", " LIST<br>") if "PACKING" in title else title
+
+        rendered_html = f'''<html><head><style>{css}</style></head><body>
+        <table class="header-table">
+            <tr>
+                <td style="width: 50%; vertical-align: bottom;">{img_tag}</td>
+                <td style="width: 50%; vertical-align: bottom; text-align: right;"><h1>{title_html}</h1></td>
+            </tr>
+        </table>
+        
+        <div class="info-block">
+            <b>Exporter:</b> {supplier}<br>
+            <b>Consignee:</b> {client}<br>
+            {c_addr}
+        </div>
+        
+        <table class="manifest-table">
+            <thead>
+                <tr>
+                    <th class="desc-col">Description</th>
+                    <th class="ctn-col" style="text-align: center;">Carton Nos</th>
+                    <th class="tot-col" style="text-align: center;">Total Ctns</th>
+                    <th class="qty-col" style="text-align: center;">Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+        
+        <div class="signature-block">
+            {sig_tag}<br>
+            <b>{signatory_position}</b>
+        </div>
+        </body></html>'''
     
     elif is_duties:
         duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
-        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
+        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
+        
+        rendered_html = f'''<html><head><style>{css}</style></head><body>
+        <table class="header-table">
+            <tr>
+                <td style="width: 50%; vertical-align: bottom;">{img_tag}</td>
+                <td style="width: 50%; vertical-align: bottom; text-align: right;"><h1>{title}</h1></td>
+            </tr>
+        </table>
+        
+        <div class="info-block">
+            <b>Invoice:</b> {inv_no}
+        </div>
+        
+        <table class="manifest-table" style="width: 60%; margin-top: 20px;">
+            <tr><td style="padding: 10px; font-weight: bold;">Converted Base Value:</td><td style="text-align: right;">${duty_data.get("convert_to_ttd",0):,.2f} TTD</td></tr>
+            <tr><td style="padding: 10px; font-weight: bold;">Customs Duty:</td><td style="text-align: right;">${duty_data.get("duty_owed",0):,.2f} TTD</td></tr>
+            <tr><td style="padding: 10px; font-weight: bold;">VAT Owed:</td><td style="text-align: right;">${duty_data.get("vat_owed",0):,.2f} TTD</td></tr>
+        </table>
+        
+        <br>
+        <table class="manifest-table" style="width: 60%;">
+            <tr>
+                <th style="background-color: #f1f5f9; font-size: 14pt; padding: 15px; text-align: left;">Total Customs Bill Due:</th>
+                <th style="background-color: #f1f5f9; font-size: 14pt; padding: 15px; text-align: right;">${duty_data.get("grand_total_ttd",0):,.2f} TTD</th>
+            </tr>
+        </table>
+        </body></html>'''
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -356,7 +435,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     return rendered_html
 
 def display_html_preview(raw_html):
-    # FIXED: Replaced deprecated components.html with safe markdown injection
+    # FIXED: Migrated away from deprecated components.html to st.markdown injection
     clean_html = re.sub(r'</?(html|body|head)[^>]*>', '', raw_html)
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333; height: 750px; overflow-y: auto;">{clean_html}</div>'
     st.markdown(preview_html, unsafe_allow_html=True)
