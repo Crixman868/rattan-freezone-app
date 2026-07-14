@@ -1,17 +1,8 @@
-import subprocess
-import sys
-
-# --- FAILSAFE: FORCE INSTALL MISSING CLOUD DEPENDENCIES ---
-try:
-    from xhtml2pdf import pisa
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "xhtml2pdf"])
-    from xhtml2pdf import pisa
-
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
-pd.options.mode.string_storage = "python"  # PREVENTS PYARROW LINUX SEGFAULT
+pd.options.mode.string_storage = "python"  # <-- PREVENTS PYARROW LINUX SEGFAULT
 import base64
 import gspread
 import json
@@ -169,6 +160,9 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
+        # PURE PYTHON PDF ENGINE - NO LINUX SEGFAULTS
+        from xhtml2pdf import pisa 
+        
         drive = get_drive_service()
         safe_client_name = str(client_name).replace("'", "\\'")
         safe_invoice_no = str(invoice_no).replace("'", "\\'")
@@ -300,118 +294,21 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
 
-    # STRICT CSS FOR PIXEL-PERFECT PDF RENDERING
-    css = """
-    @page { size: letter portrait; margin: 15mm; }
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #333333; line-height: 1.4; }
-    h1 { color: #1e293b; font-size: 20pt; margin: 0; text-align: right; text-transform: uppercase; font-weight: bold; }
-    .header-table { width: 100%; border: none; margin-bottom: 20px; }
-    .info-block { margin-bottom: 25px; line-height: 1.6; }
-    
-    /* Pixel-perfect table matching */
-    .manifest-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #e2e8f0; }
-    .manifest-table th { 
-        background-color: #f1f5f9; 
-        border: 1px solid #cbd5e1; 
-        padding: 12px 10px; 
-        font-weight: bold; 
-        color: #1e293b; 
-    }
-    .manifest-table td { 
-        border: 1px solid #cbd5e1; 
-        padding: 12px 10px; 
-        vertical-align: middle; 
-        color: #475569;
-    }
-    
-    /* Specific Column Widths & Alignments */
-    .desc-col { width: 50%; text-align: left; }
-    .ctn-col { width: 18%; text-align: center; font-weight: bold; }
-    .tot-col { width: 16%; text-align: center; }
-    .qty-col { width: 16%; text-align: center; font-weight: bold; }
-    
-    .signature-block { text-align: right; margin-top: 35px; margin-right: 20px; }
-    """
-
     if is_packing:
         table_rows = ""
-        # FAILSAFE: Ensure DataFrame is not empty before iterating
-        if not df.empty:
-            for idx, row in df.iterrows():
-                qty = safe_qty_parse(row.get("QUANTITY", 0))
-                table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col">{row.get("CTNS NOS","N/A")}</td><td class="tot-col">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
-        else:
-            table_rows = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No packing data mapped.</td></tr>'
-
-        img_tag = f'<img src="{logo_path}" style="height: 55px; width: auto;">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" style="height: 70px; width: auto;">' if sig_path else ''
+        for idx, row in df.iterrows():
+            qty = safe_qty_parse(row.get("QUANTITY", 0))
+            table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
         
-        title_html = title.replace(" LIST ", " LIST<br>") if "PACKING" in title else title
-
-        rendered_html = f'''<html><head><style>{css}</style></head><body>
-        <table class="header-table">
-            <tr>
-                <td style="width: 50%; vertical-align: bottom;">{img_tag}</td>
-                <td style="width: 50%; vertical-align: bottom; text-align: right;"><h1>{title_html}</h1></td>
-            </tr>
-        </table>
+        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         
-        <div class="info-block">
-            <b>Exporter:</b> {supplier}<br>
-            <b>Consignee:</b> {client}<br>
-            {c_addr}
-        </div>
-        
-        <table class="manifest-table">
-            <thead>
-                <tr>
-                    <th class="desc-col">Description</th>
-                    <th class="ctn-col" style="text-align: center;">Carton<br>Nos</th>
-                    <th class="tot-col" style="text-align: center;">Total<br>Ctns</th>
-                    <th class="qty-col" style="text-align: center;">Qty</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
-        
-        <div class="signature-block">
-            {sig_tag}<br>
-            <b>{signatory_position}</b>
-        </div>
-        </body></html>'''
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
     
     elif is_duties:
         duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" style="height: 50px; width: auto;">' if logo_path else ''
-        
-        rendered_html = f'''<html><head><style>{css}</style></head><body>
-        <table class="header-table">
-            <tr>
-                <td style="width: 50%; vertical-align: bottom;">{img_tag}</td>
-                <td style="width: 50%; vertical-align: bottom; text-align: right;"><h1>{title}</h1></td>
-            </tr>
-        </table>
-        
-        <div class="info-block">
-            <b>Invoice:</b> {inv_no}
-        </div>
-        
-        <table class="manifest-table" style="width: 65%; margin-top: 25px;">
-            <tr><td style="padding: 12px; font-weight: bold; width: 60%;">Converted Base Value:</td><td style="text-align: right;">${duty_data.get("convert_to_ttd",0):,.2f} TTD</td></tr>
-            <tr><td style="padding: 12px; font-weight: bold;">Customs Duty:</td><td style="text-align: right;">${duty_data.get("duty_owed",0):,.2f} TTD</td></tr>
-            <tr><td style="padding: 12px; font-weight: bold;">VAT Owed:</td><td style="text-align: right;">${duty_data.get("vat_owed",0):,.2f} TTD</td></tr>
-        </table>
-        
-        <br>
-        <table class="manifest-table" style="width: 65%;">
-            <tr>
-                <th style="background-color: #f1f5f9; font-size: 13pt; padding: 15px; text-align: left; width: 50%;">Total Customs Bill Due:</th>
-                <th style="background-color: #f1f5f9; font-size: 13pt; padding: 15px; text-align: right;">${duty_data.get("grand_total_ttd",0):,.2f} TTD</th>
-            </tr>
-        </table>
-        </body></html>'''
+        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
+        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
     
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
@@ -423,21 +320,20 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             template = template_env.from_string("<h1>{{title}}</h1><p><b>Exporter:</b> {{supplier_name}}<br><b>Consignee:</b> {{client_name}}</p><table border='1' width='100%' cellspacing='0' cellpadding='5'><thead><tr bgcolor='#f2f2f2'><th>Description</th><th>Qty</th><th>Total</th></tr></thead><tbody>{% for item in items %}<tr><td>{{item.Description}}</td><td>{{item.Qty}}</td><td>{{item.Total}}</td></tr>{% endfor %}</tbody></table>")
 
         items = []
-        if not df.empty:
-            for idx, row in df.iterrows():
-                desc = str(row["Description"])[:250]
-                parsed_qty = safe_qty_parse(row.get('Qty', 0))
-                qty = f"{parsed_qty:,}" if parsed_qty else ""
-                try:
-                    price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
-                except ValueError:
-                    price = ""
-                try:
-                    total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
-                except ValueError:
-                    total = ""
-                    
-                items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
+        for idx, row in df.iterrows():
+            desc = str(row["Description"])[:250]
+            parsed_qty = safe_qty_parse(row.get('Qty', 0))
+            qty = f"{parsed_qty:,}" if parsed_qty else ""
+            try:
+                price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
+            except ValueError:
+                price = ""
+            try:
+                total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
+            except ValueError:
+                total = ""
+                
+            items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
             
         rendered_html = template.render({
             "title": title, "inv_no": inv_no, "date": date, "client_name": client, 
@@ -454,9 +350,8 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     return rendered_html
 
 def display_html_preview(raw_html):
-    clean_html = re.sub(r'</?(html|body|head)[^>]*>', '', raw_html)
-    preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333; height: 750px; overflow-y: auto;">{clean_html}</div>'
-    st.markdown(preview_html, unsafe_allow_html=True)
+    preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
+    components.html(preview_html, height=750, scrolling=True)
 
 
 # ==========================================
@@ -620,36 +515,16 @@ def render_admin_tracker():
         map_description, map_qty, map_price = "-- Select --", "-- Select --", "-- Select --"
         
         if uploaded_file is not None:
-            try:
-                if uploaded_file.name.endswith('.csv'):
-                    import io
-                    import csv
-                    decoded_file = uploaded_file.getvalue().decode('utf-8', errors='replace')
-                    reader = csv.reader(io.StringIO(decoded_file))
-                    raw_data = list(reader)
-                    if len(raw_data) > 0:
-                        headers = raw_data[0]
-                        data_rows = raw_data[1:]
-                        df_raw = pd.DataFrame(data_rows, columns=headers, dtype=object)
-                    else:
-                        df_raw = pd.DataFrame()
-                else:
-                    df_raw = pd.read_excel(uploaded_file, engine='openpyxl', dtype=object)
-                
-                if not df_raw.empty:
-                    all_columns = list(df_raw.dropna(how='all', axis=1).columns)
-                    cm1, cm2, cm3 = st.columns(3)
-                    with cm1: map_description = st.selectbox("Description Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_desc)+1 if saved_desc in all_columns else 0)
-                    with cm2: map_qty = st.selectbox("Quantity Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_qty)+1 if saved_qty in all_columns else 0)
-                    with cm3: map_price = st.selectbox("Unit Price Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_price)+1 if saved_price in all_columns else 0)
-                    
-                    if map_description != "-- Select --" and (map_description != saved_desc or map_qty != saved_qty or map_price != saved_price):
-                        if st.button("Save Column Translation Matrix"):
-                            save_supplier_mapping(supplier_name, map_description, map_qty, map_price)
-                            st.success("Matrix Mapped!")
-            except Exception as e:
-                st.error(f"Failed to safely parse the file: {e}")
-                df_raw = pd.DataFrame()
+            df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+            all_columns = list(df_raw.dropna(how='all').columns)
+            cm1, cm2, cm3 = st.columns(3)
+            with cm1: map_description = st.selectbox("Description Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_desc)+1 if saved_desc in all_columns else 0)
+            with cm2: map_qty = st.selectbox("Quantity Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_qty)+1 if saved_qty in all_columns else 0)
+            with cm3: map_price = st.selectbox("Unit Price Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_price)+1 if saved_price in all_columns else 0)
+            if map_description != "-- Select --" and (map_description != saved_desc or map_qty != saved_qty or map_price != saved_price):
+                if st.button("Save Column Translation Matrix"):
+                    save_supplier_mapping(supplier_name, map_description, map_qty, map_price)
+                    st.success("Matrix Mapped!")
 
         st.write("---")
         st.markdown("#### Logistics Manifest Fields")
@@ -690,6 +565,7 @@ def render_admin_tracker():
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
             
+            # STRICT TYPE CASTING TO PREVENT PYARROW C++ CRASHES
             df_clean["Description"] = df_clean["Description"].astype(str)
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
@@ -718,6 +594,7 @@ def render_admin_tracker():
             if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
                 st.session_state["active_file_hash"] = file_state_hash
                 
+                # STRICTLY TYPE THE EDITOR DATAFRAME TO PREVENT STREAMLIT SEGFAULT
                 base_pck_df = df_raw[[map_description, map_qty]].dropna().copy()
                 base_pck_df.columns = ["SPECIFICATION OF COMMODITIES", "QUANTITY"]
                 base_pck_df["SPECIFICATION OF COMMODITIES"] = base_pck_df["SPECIFICATION OF COMMODITIES"].astype(str)
