@@ -300,34 +300,48 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
     sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
 
-    # STRICT CSS FRAMEWORK FOR XHTML2PDF TO PREVENT WARPED TABLES AND BLOWN-UP IMAGES
+    # STRICT CSS FOR PIXEL-PERFECT PDF RENDERING
     css = """
     @page { size: letter portrait; margin: 15mm; }
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #333333; }
-    h1 { color: #1e293b; font-size: 22pt; margin: 0; text-align: right; text-transform: uppercase; }
-    .header-table { width: 100%; border: none; margin-bottom: 25px; }
-    .info-block { margin-bottom: 20px; line-height: 1.5; }
-    .manifest-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    .manifest-table th { background-color: #f8f9fa; border: 1px solid #cbd5e1; padding: 10px; font-weight: bold; text-align: left; }
-    .manifest-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: middle; }
-    .desc-col { width: 55%; text-align: left; }
-    .ctn-col { width: 15%; text-align: center; }
-    .tot-col { width: 15%; text-align: center; }
-    .qty-col { width: 15%; text-align: right; }
-    .signature-block { text-align: right; margin-top: 40px; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #333333; line-height: 1.4; }
+    h1 { color: #1e293b; font-size: 20pt; margin: 0; text-align: right; text-transform: uppercase; font-weight: bold; }
+    .header-table { width: 100%; border: none; margin-bottom: 20px; }
+    .info-block { margin-bottom: 25px; line-height: 1.6; }
+    
+    /* Pixel-perfect table matching */
+    .manifest-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+    .manifest-table th { 
+        background-color: #f1f5f9; 
+        border: 1px solid #cbd5e1; 
+        padding: 12px 10px; 
+        font-weight: bold; 
+        color: #1e293b; 
+    }
+    .manifest-table td { 
+        border: 1px solid #cbd5e1; 
+        padding: 12px 10px; 
+        vertical-align: middle; 
+        color: #475569;
+    }
+    
+    /* Specific Column Widths & Alignments */
+    .desc-col { width: 50%; text-align: left; }
+    .ctn-col { width: 18%; text-align: center; font-weight: bold; }
+    .tot-col { width: 16%; text-align: center; }
+    .qty-col { width: 16%; text-align: center; font-weight: bold; }
+    
+    .signature-block { text-align: right; margin-top: 35px; margin-right: 20px; }
     """
 
     if is_packing:
         table_rows = ""
         for idx, row in df.iterrows():
             qty = safe_qty_parse(row.get("QUANTITY", 0))
-            table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col" style="text-align: center;">{row.get("CTNS NOS","N/A")}</td><td class="tot-col" style="text-align: center;">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
+            table_rows += f'<tr><td class="desc-col">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td class="ctn-col">{row.get("CTNS NOS","N/A")}</td><td class="tot-col">{row.get("TOTAL CTNS",0)}</td><td class="qty-col" style="text-align: right;">{qty:,}</td></tr>'
         
-        # EXPLICIT HEIGHT STYLING REQUIRED BY XHTML2PDF FOR BASE64 IMAGES
-        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" style="height: 80px;">' if sig_path else ''
+        img_tag = f'<img src="{logo_path}" style="height: 55px; width: auto;">' if logo_path else ''
+        sig_tag = f'<img src="{sig_path}" style="height: 70px; width: auto;">' if sig_path else ''
         
-        # Format "PACKING LIST MANIFEST" to split onto two lines cleanly
         title_html = title.replace(" LIST ", " LIST<br>") if "PACKING" in title else title
 
         rendered_html = f'''<html><head><style>{css}</style></head><body>
@@ -348,8 +362,8 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             <thead>
                 <tr>
                     <th class="desc-col">Description</th>
-                    <th class="ctn-col" style="text-align: center;">Carton Nos</th>
-                    <th class="tot-col" style="text-align: center;">Total Ctns</th>
+                    <th class="ctn-col" style="text-align: center;">Carton<br>Nos</th>
+                    <th class="tot-col" style="text-align: center;">Total<br>Ctns</th>
                     <th class="qty-col" style="text-align: center;">Qty</th>
                 </tr>
             </thead>
@@ -366,7 +380,7 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     
     elif is_duties:
         duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" style="height: 50px;">' if logo_path else ''
+        img_tag = f'<img src="{logo_path}" style="height: 50px; width: auto;">' if logo_path else ''
         
         rendered_html = f'''<html><head><style>{css}</style></head><body>
         <table class="header-table">
@@ -380,17 +394,17 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             <b>Invoice:</b> {inv_no}
         </div>
         
-        <table class="manifest-table" style="width: 60%; margin-top: 20px;">
-            <tr><td style="padding: 10px; font-weight: bold;">Converted Base Value:</td><td style="text-align: right;">${duty_data.get("convert_to_ttd",0):,.2f} TTD</td></tr>
-            <tr><td style="padding: 10px; font-weight: bold;">Customs Duty:</td><td style="text-align: right;">${duty_data.get("duty_owed",0):,.2f} TTD</td></tr>
-            <tr><td style="padding: 10px; font-weight: bold;">VAT Owed:</td><td style="text-align: right;">${duty_data.get("vat_owed",0):,.2f} TTD</td></tr>
+        <table class="manifest-table" style="width: 65%; margin-top: 25px;">
+            <tr><td style="padding: 12px; font-weight: bold; width: 60%;">Converted Base Value:</td><td style="text-align: right;">${duty_data.get("convert_to_ttd",0):,.2f} TTD</td></tr>
+            <tr><td style="padding: 12px; font-weight: bold;">Customs Duty:</td><td style="text-align: right;">${duty_data.get("duty_owed",0):,.2f} TTD</td></tr>
+            <tr><td style="padding: 12px; font-weight: bold;">VAT Owed:</td><td style="text-align: right;">${duty_data.get("vat_owed",0):,.2f} TTD</td></tr>
         </table>
         
         <br>
-        <table class="manifest-table" style="width: 60%;">
+        <table class="manifest-table" style="width: 65%;">
             <tr>
-                <th style="background-color: #f1f5f9; font-size: 14pt; padding: 15px; text-align: left;">Total Customs Bill Due:</th>
-                <th style="background-color: #f1f5f9; font-size: 14pt; padding: 15px; text-align: right;">${duty_data.get("grand_total_ttd",0):,.2f} TTD</th>
+                <th style="background-color: #f1f5f9; font-size: 13pt; padding: 15px; text-align: left; width: 50%;">Total Customs Bill Due:</th>
+                <th style="background-color: #f1f5f9; font-size: 13pt; padding: 15px; text-align: right;">${duty_data.get("grand_total_ttd",0):,.2f} TTD</th>
             </tr>
         </table>
         </body></html>'''
@@ -435,7 +449,6 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
     return rendered_html
 
 def display_html_preview(raw_html):
-    # FIXED: Migrated away from deprecated components.html to st.markdown injection
     clean_html = re.sub(r'</?(html|body|head)[^>]*>', '', raw_html)
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333; height: 750px; overflow-y: auto;">{clean_html}</div>'
     st.markdown(preview_html, unsafe_allow_html=True)
