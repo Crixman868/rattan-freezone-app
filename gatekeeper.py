@@ -6,8 +6,13 @@ import gspread
 from datetime import datetime
 from google.oauth2.service_account import Credentials as BotCredentials
 
-# 1. INITIALIZE PAGE CONFIG AT THE VERY TOP
-st.set_page_config(page_title="Meridian Command Console", page_icon="📦", layout="wide")
+# 1. INITIALIZE PAGE CONFIG AT THE VERY TOP (STRICTLY SET TO WIDE)
+st.set_page_config(
+    page_title="Meridian Command Console", 
+    page_icon="📦", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1wUBZSnB7cJ2T5_iY5_POpfsNmZn0INGj08EdcLc7TsQ/edit?usp=sharing"
 
