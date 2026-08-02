@@ -51,17 +51,20 @@
             color: #ffffff;
         }
         .brand-name {
-            font-size: 26pt;
+            font-size: 24pt;
             font-weight: 300;
             letter-spacing: 4px;
             margin: 0;
             text-transform: uppercase;
+            line-height: 1;
         }
         .brand-address {
             font-size: 8pt;
             letter-spacing: 1px;
             color: #e0e0e0;
-            margin-top: 4px;
+            margin: 0;
+            padding-top: 3px;
+            line-height: 1;
         }
         
         .invoice-banner {
@@ -76,6 +79,8 @@
             letter-spacing: 2px;
             text-align: right;
             text-transform: uppercase;
+            margin: 0;
+            line-height: 1.2;
         }
 
         /* DATA BLOCKS */
@@ -123,10 +128,10 @@
 </head>
 <body>
 
-    <!-- BRAND BANNER -->
+    <!-- COMPACT CENTERED BRAND BANNER -->
     <table class="brand-header">
         <tr>
-            <td style="padding: 15px 20px;">
+            <td style="padding: 8px 20px; text-align: center; vertical-align: middle;">
                 <h1 class="brand-name">{{ supplier_name }}</h1>
                 <div class="brand-address">{{ supplier_address }}</div>
             </td>
@@ -135,14 +140,14 @@
 
     <div style="height: 5px;"></div>
 
-    <!-- DOCUMENT CONTROL ALIGNMENT -->
+    <!-- DOCUMENT CONTROL ALIGNMENT (TOP FLUSH) -->
     <table class="invoice-banner">
         <tr>
-            <td style="width: 50%; vertical-align: bottom;">
+            <td style="width: 50%; vertical-align: top; padding-top: 0;">
                 <table style="width: 80%; margin-bottom: 0;">
                     <tr>
-                        <td class="data-key" style="width: 30%;">INV NO:</td>
-                        <td class="data-value" style="font-weight: bold;">{{ inv_no }}</td>
+                        <td class="data-key" style="width: 30%; padding-top: 0;">INV NO:</td>
+                        <td class="data-value" style="font-weight: bold; padding-top: 0;">{{ inv_no }}</td>
                     </tr>
                     <tr>
                         <td class="data-key">DATE:</td>
@@ -150,7 +155,7 @@
                     </tr>
                 </table>
             </td>
-            <td style="width: 50%; vertical-align: bottom;">
+            <td style="width: 50%; vertical-align: top; padding-top: 0;">
                 <div class="invoice-text">Commercial Invoice</div>
             </td>
         </tr>
@@ -212,20 +217,21 @@
         </tbody>
     </table>
 
-    <!-- TOTALS & STRICT SIGNATURE SEGMENT -->
+    <!-- TOTALS & ENLARGED SIGNATURE SEGMENT -->
     <div class="avoid-break">
         <table style="margin-top: 5px;">
             <tr>
                 <td style="width: 60%; padding-left: 0; vertical-align: bottom;">
-                    <!-- MANDATED SIGNATURE LOGIC & HEIGHT ENFORCEMENT -->
-                    <table style="width: 75%;">
+                    <!-- SCALED SIGNATURE LOGIC & HEIGHT ENFORCEMENT -->
+                    <table style="width: 85%;">
                         <tr>
                             <td style="border-bottom: 1px solid #222222; vertical-align: bottom; padding: 0 0 2px 0;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <img src="{{ sig_path }}" height="40" style="height: 40px; display: inline-block;">
+                                        <!-- Height overridden to 120px to support massive authentic chop scale -->
+                                        <img src="{{ sig_path }}" height="120" style="height: 120px; width: auto; display: inline-block;">
                                     {% else %}
-                                        <div style="height: 40px;"></div>
+                                        <div style="height: 120px;"></div>
                                     {% endif %}
                                 </div>
                             </td>
