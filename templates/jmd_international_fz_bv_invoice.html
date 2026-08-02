@@ -221,15 +221,16 @@
         <table style="margin-top: 8px;">
             <tr>
                 <td style="width: 55%; padding-left: 0; vertical-align: bottom;">
-                    <!-- STRICT SIGNATURE BLOCK WITH HEIGHT ENFORCEMENT -->
+                    <!-- STRICT SIGNATURE BLOCK WITH ENLARGED HEIGHT ENFORCEMENT -->
                     <table style="width: 85%;">
                         <tr>
-                            <td style="border-bottom: 1px solid #333333; vertical-align: bottom; padding: 0 0 5px 0;">
+                            <td style="border-bottom: 1px solid #333333; vertical-align: bottom; padding: 0 0 5px 0; height: 125px;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <img src="{{ sig_path }}" height="40" style="height: 40px; display: inline-block;">
+                                        <!-- Height explicitly increased to 120px to allow realistic stamp scaling without forcing a straight edge -->
+                                        <img src="{{ sig_path }}" height="120" style="height: 120px; width: auto; display: inline-block;">
                                     {% else %}
-                                        <div style="height: 40px;"></div>
+                                        <div style="height: 120px;"></div>
                                     {% endif %}
                                 </div>
                             </td>
