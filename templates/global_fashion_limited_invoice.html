@@ -164,16 +164,18 @@
     <!-- ASYMMETRICAL LOGISTICS SPLIT -->
     <table>
         <tr>
-            <!-- CLIENT BLOCK -->
-            <td style="width: 55%; padding-left: 0;">
+            <!-- CLIENT BLOCK (48% WIDTH FOR STRICT HTML TABLE COMPLIANCE) -->
+            <td style="width: 48%; padding-left: 0;">
                 <div class="data-key" style="border-bottom: 1px solid #5B1414; margin-bottom: 5px; width: 90%;">CONSIGNEE</div>
                 <div style="min-height: 55px; padding-top: 4px; line-height: 1.4;">
                     <strong>{{ client_name }}</strong><br>
                     {{ client_address }}
                 </div>
             </td>
-            <!-- SHIPPING BLOCK -->
-            <td style="width: 45%; padding-right: 0;">
+            <!-- GUTTER -->
+            <td style="width: 4%;"></td>
+            <!-- SHIPPING BLOCK (48% WIDTH FOR STRICT HTML TABLE COMPLIANCE) -->
+            <td style="width: 48%; padding-right: 0;">
                 <div class="data-key" style="border-bottom: 1px solid #5B1414; margin-bottom: 5px;">LOGISTICS PROFILE</div>
                 <table style="margin-top: 4px; margin-bottom: 0;">
                     <tr>
@@ -217,21 +219,21 @@
         </tbody>
     </table>
 
-    <!-- TOTALS & ENLARGED SIGNATURE SEGMENT -->
+    <!-- TOTALS & SIGNATURE SEGMENT -->
     <div class="avoid-break">
         <table style="margin-top: 5px;">
             <tr>
                 <td style="width: 60%; padding-left: 0; vertical-align: bottom;">
-                    <!-- SCALED SIGNATURE LOGIC & HEIGHT ENFORCEMENT -->
+                    <!-- MANDATED STRICT SIGNATURE LOGIC BLOCK -->
                     <table style="width: 85%;">
                         <tr>
                             <td style="border-bottom: 1px solid #222222; vertical-align: bottom; padding: 0 0 2px 0;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <!-- Height overridden to 120px to support massive authentic chop scale -->
-                                        <img src="{{ sig_path }}" height="120" style="height: 120px; width: auto; display: inline-block;">
+                                        <img src="{{ sig_path }}" style="height: 40px; max-height: 40px; display: inline-block;">
                                     {% else %}
-                                        <div style="height: 120px;"></div>
+                                        <!-- FALLBACK TO PREVENT COLLAPSE -->
+                                        <div style="height: 40px;"></div>
                                     {% endif %}
                                 </div>
                             </td>
