@@ -224,16 +224,17 @@
         <table style="margin-top: 5px;">
             <tr>
                 <td style="width: 60%; padding-left: 0; vertical-align: bottom;">
-                    <!-- SCALED SIGNATURE LOGIC & REALISTIC HEIGHT ENFORCEMENT -->
+                    <!-- ACCURATELY SCALED SIGNATURE BLOCK -->
                     <table style="width: 85%;">
                         <tr>
                             <td style="border-bottom: 1px solid #222222; vertical-align: bottom; padding: 0 0 2px 0;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <img src="{{ sig_path }}" height="120" style="height: 120px; width: auto; display: inline-block;">
+                                        <!-- Height locked to a realistic 75px (~1.04 inches) -->
+                                        <img src="{{ sig_path }}" height="75" style="height: 75px; width: auto; display: inline-block;">
                                     {% else %}
                                         <!-- FALLBACK TO PREVENT COLLAPSE -->
-                                        <div style="height: 120px;"></div>
+                                        <div style="height: 75px;"></div>
                                     {% endif %}
                                 </div>
                             </td>
