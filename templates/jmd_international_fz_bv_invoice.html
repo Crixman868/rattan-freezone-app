@@ -6,7 +6,7 @@
         /* CORE PAGE GEOMETRY - LETTER PORTRAIT */
         @page {
             size: letter portrait;
-            margin: 12mm;
+            margin: 15mm;
         }
         
         /* TYPOGRAPHY OVERRIDE - BYPASSES PDF RENDER ARTIFACTS */
@@ -221,13 +221,13 @@
         <table style="margin-top: 8px;">
             <tr>
                 <td style="width: 55%; padding-left: 0; vertical-align: bottom;">
-                    <!-- STRICT SIGNATURE BLOCK WITH FALLBACK -->
+                    <!-- STRICT SIGNATURE BLOCK WITH HEIGHT ENFORCEMENT -->
                     <table style="width: 85%;">
                         <tr>
                             <td style="border-bottom: 1px solid #333333; vertical-align: bottom; padding: 0 0 5px 0;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <img src="{{ sig_path }}" style="max-height: 40px; display: inline-block;">
+                                        <img src="{{ sig_path }}" height="40" style="height: 40px; display: inline-block;">
                                     {% else %}
                                         <div style="height: 40px;"></div>
                                     {% endif %}
