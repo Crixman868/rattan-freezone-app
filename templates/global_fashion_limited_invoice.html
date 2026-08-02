@@ -164,7 +164,7 @@
     <!-- ASYMMETRICAL LOGISTICS SPLIT -->
     <table>
         <tr>
-            <!-- CLIENT BLOCK (48% WIDTH FOR STRICT HTML TABLE COMPLIANCE) -->
+            <!-- CLIENT BLOCK -->
             <td style="width: 48%; padding-left: 0;">
                 <div class="data-key" style="border-bottom: 1px solid #5B1414; margin-bottom: 5px; width: 90%;">CONSIGNEE</div>
                 <div style="min-height: 55px; padding-top: 4px; line-height: 1.4;">
@@ -174,7 +174,7 @@
             </td>
             <!-- GUTTER -->
             <td style="width: 4%;"></td>
-            <!-- SHIPPING BLOCK (48% WIDTH FOR STRICT HTML TABLE COMPLIANCE) -->
+            <!-- SHIPPING BLOCK -->
             <td style="width: 48%; padding-right: 0;">
                 <div class="data-key" style="border-bottom: 1px solid #5B1414; margin-bottom: 5px;">LOGISTICS PROFILE</div>
                 <table style="margin-top: 4px; margin-bottom: 0;">
@@ -224,16 +224,16 @@
         <table style="margin-top: 5px;">
             <tr>
                 <td style="width: 60%; padding-left: 0; vertical-align: bottom;">
-                    <!-- MANDATED STRICT SIGNATURE LOGIC BLOCK -->
+                    <!-- SCALED SIGNATURE LOGIC & REALISTIC HEIGHT ENFORCEMENT -->
                     <table style="width: 85%;">
                         <tr>
                             <td style="border-bottom: 1px solid #222222; vertical-align: bottom; padding: 0 0 2px 0;">
                                 <div class="signature-frame">
                                     {% if sig_path %}
-                                        <img src="{{ sig_path }}" style="height: 40px; max-height: 40px; display: inline-block;">
+                                        <img src="{{ sig_path }}" height="120" style="height: 120px; width: auto; display: inline-block;">
                                     {% else %}
                                         <!-- FALLBACK TO PREVENT COLLAPSE -->
-                                        <div style="height: 40px;"></div>
+                                        <div style="height: 120px;"></div>
                                     {% endif %}
                                 </div>
                             </td>
