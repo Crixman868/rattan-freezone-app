@@ -119,12 +119,11 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
+from google.oauth2.credentials import Credentials as HumanCredentials
+
 def get_drive_service():
-    creds_dict = json.loads(st.secrets["google_api"]["credentials"])
-    creds = BotCredentials.from_service_account_info(
-        creds_dict,
-        scopes=['https://www.googleapis.com/auth/drive']
-    )
+    token_info = json.loads(st.secrets["google_drive_human"]["token"])
+    creds = HumanCredentials.from_authorized_user_info(token_info)
     return build('drive', 'v3', credentials=creds)
 
 @st.cache_data(ttl=60)
