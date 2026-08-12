@@ -633,7 +633,8 @@ def render_admin_tracker():
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Commercial Invoice"] = inv_link
                         save_log_data(df_update)
-                        st.success("✅ Commercial Invoice locked!")st.cache_data.clear()
+                        st.success("✅ Commercial Invoice locked!")
+st.cache_data.clear()
                 
         with t_car:
             orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
@@ -687,7 +688,8 @@ def render_admin_tracker():
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "CARICOM Invoice"] = link
                         save_log_data(df_update)
-                        st.success("✅ CARICOM Locked!")st.cache_data.clear()
+                        st.success("✅ CARICOM Locked!")
+st.cache_data.clear()
                 
         with t_pck:
             if "pck_working_df" in st.session_state:
@@ -727,7 +729,8 @@ def render_admin_tracker():
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Sequential Packing List"] = pck_link
                         save_log_data(df_update)
-                        st.success("✅ Packing Manifest locked!")st.cache_data.clear()
+                        st.success("✅ Packing Manifest locked!")
+st.cache_data.clear()
                 
         with t_dut:
             if st.button("⚙️ Preview Customs Summary"): 
@@ -744,7 +747,8 @@ def render_admin_tracker():
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Official Duties Assessment"] = dut_link
                         save_log_data(df_update)
-                        st.success("✅ Customs Summary locked!")st.cache_data.clear()
+                        st.success("✅ Customs Summary locked!")
+st.cache_data.clear()
 
 # ==========================================
 # 6. NEW ADMIN RENDERERS
