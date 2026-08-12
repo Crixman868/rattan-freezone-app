@@ -691,7 +691,7 @@ with t_car:
                         st.success("✅ CARICOM Locked!")
 st.cache_data.clear()
                 
-        with t_pck:
+with t_pck:
             if "pck_working_df" in st.session_state:
                 st.markdown("##### Interactive Packing Line Sheet")
                 with st.form("packing_matrix_form"):
@@ -732,7 +732,7 @@ st.cache_data.clear()
                         st.success("✅ Packing Manifest locked!")
 st.cache_data.clear()
                 
-        with t_dut:
+with t_dut:
             if st.button("⚙️ Preview Customs Summary"): 
                 st.session_state["h_dut"] = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
             if "h_dut" in st.session_state: 
