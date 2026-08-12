@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#D8000C"          # Signature Rattan Red
+backgroundColor = "#FFFFFF"       # Clean White
+secondaryBackgroundColor = "#F4F6F8" # Light Neutral Sidebar
+textColor = "#111111"             # Dark Reading Text
+font = "sans serif"

@@ -18,7 +18,15 @@ from googleapiclient.http import MediaFileUpload
 # ==========================================
 # 1. GLOBAL SETUP & CSS
 # ==========================================
-st.set_page_config(page_title="Meridian Command Console", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Rattan Freezone - Logistics Portal", page_icon="🚢", layout="wide")
+
+# Main Header & Address Banner
+st.title("🔴 RATTAN FREEZONE")
+st.caption("""
+**Pennywise Plaza** | Lot D Cor Biljah Rd & Nasalou Ramaya Rd | East Chaguanas  
+**VAT REG#:** 202049
+""")
+st.divider()
 
 COMPANY_LOGO_PATH = "company_logo.png"
 
