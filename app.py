@@ -121,11 +121,17 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-def get_drive_service():
-    token_dict = json.loads(st.secrets["google_drive_human"]["token"])
-    creds = HumanCredentials.from_authorized_user_info(token_dict)
-    return build('drive', 'v3', credentials=creds)
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
+def get_drive_service():
+    creds_dict = json.loads(st.secrets["google_api"]["credentials"])
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=['https://www.googleapis.com/auth/drive']
+    )
+    return build('drive', 'v3', credentials=creds)
 def load_log_data():
     try: 
         ws = get_gspread_client().open_by_url(SHEET_URL).sheet1
