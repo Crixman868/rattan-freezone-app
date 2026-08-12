@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import os
-pd.options.mode.string_storage = "python"  # <-- PREVENTS PYARROW LINUX SEGFAULT
+pd.options.mode.string_storage = "python"  # PREVENTS PYARROW LINUX SEGFAULT
 import base64
 import gspread
 import json
@@ -11,7 +11,6 @@ import re
 import tempfile
 from datetime import datetime
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials as HumanCredentials
 from google.oauth2.service_account import Credentials as BotCredentials
 from googleapiclient.http import MediaFileUpload
 
@@ -20,7 +19,6 @@ from googleapiclient.http import MediaFileUpload
 # ==========================================
 st.set_page_config(page_title="Rattan Freezone - Logistics Portal", page_icon="🚢", layout="wide")
 
-# Main Header & Address Banner
 st.title("🔴 RATTAN FREEZONE")
 st.caption("""
 **Pennywise Plaza** | Lot D Cor Biljah Rd & Nasalou Ramaya Rd | East Chaguanas  
@@ -121,17 +119,14 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-import json
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-
 def get_drive_service():
     creds_dict = json.loads(st.secrets["google_api"]["credentials"])
-    creds = service_account.Credentials.from_service_account_info(
+    creds = BotCredentials.from_service_account_info(
         creds_dict,
         scopes=['https://www.googleapis.com/auth/drive']
     )
     return build('drive', 'v3', credentials=creds)
+
 @st.cache_data(ttl=60)
 def load_log_data():
     try: 
@@ -175,7 +170,6 @@ def save_log_data(df):
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
     try:
-        # PURE PYTHON PDF ENGINE - NO LINUX SEGFAULTS
         from xhtml2pdf import pisa 
         
         drive = get_drive_service()
@@ -368,9 +362,8 @@ def display_html_preview(raw_html):
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
     components.html(preview_html, height=750, scrolling=True)
 
-
 # ==========================================
-# 5. APP VIEWS (THE "PAGES")
+# 5. APP VIEWS
 # ==========================================
 
 def render_master_log():
@@ -461,6 +454,7 @@ def render_master_log():
                             if new_link: df_update.at[row_index, slot_name] = new_link
                             
                         if save_log_data(df_update):
+                            st.cache_data.clear()
                             st.success("✅ Updates saved!")
                             st.rerun()
 
@@ -561,10 +555,12 @@ def render_admin_tracker():
 
         st.markdown("#### Tariff Tax Parameters")
         tx1, tx2 = st.columns(2)
-        with tx1: duty_percentage = st.number_input("Duty Rate (%)", value=20.0)
-        with tx1: vat_percentage = st.number_input("VAT Rate (%)", value=12.5)
-        with tx2: ces_fee = st.number_input("CES Fee (TTD)", value=1050.00)
-        with tx2: uf_fee = st.number_input("UF Fee (TTD)", value=80.00)
+        with tx1: 
+            duty_percentage = st.number_input("Duty Rate (%)", value=20.0)
+            vat_percentage = st.number_input("VAT Rate (%)", value=12.5)
+        with tx2: 
+            ces_fee = st.number_input("CES Fee (TTD)", value=1050.00)
+            uf_fee = st.number_input("UF Fee (TTD)", value=80.00)
 
     with col2:
         st.subheader("Targeted Document Generation (Save Independently)")
@@ -580,7 +576,6 @@ def render_admin_tracker():
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
             
-            # STRICT TYPE CASTING TO PREVENT PYARROW C++ CRASHES
             df_clean["Description"] = df_clean["Description"].astype(str)
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
@@ -609,7 +604,6 @@ def render_admin_tracker():
             if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
                 st.session_state["active_file_hash"] = file_state_hash
                 
-                # STRICTLY TYPE THE EDITOR DATAFRAME TO PREVENT STREAMLIT SEGFAULT
                 base_pck_df = df_raw[[map_description, map_qty]].dropna().copy()
                 base_pck_df.columns = ["SPECIFICATION OF COMMODITIES", "QUANTITY"]
                 base_pck_df["SPECIFICATION OF COMMODITIES"] = base_pck_df["SPECIFICATION OF COMMODITIES"].astype(str)
@@ -632,11 +626,11 @@ def render_admin_tracker():
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Commercial Invoice"] = inv_link
-                        save_log_data(df_update)
-                        st.success("✅ Commercial Invoice locked!")
-st.cache_data.clear()
-                
-with t_car:
+                        if save_log_data(df_update):
+                            st.cache_data.clear()
+                            st.success("✅ Commercial Invoice locked!")
+
+        with t_car:
             orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
             
             with st.expander("📝 Customs Compliance Details (CARICOM)", expanded=True):
@@ -687,11 +681,11 @@ with t_car:
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "CARICOM Invoice"] = link
-                        save_log_data(df_update)
-                        st.success("✅ CARICOM Locked!")
-st.cache_data.clear()
-                
-with t_pck:
+                        if save_log_data(df_update):
+                            st.cache_data.clear()
+                            st.success("✅ CARICOM Locked!")
+
+        with t_pck:
             if "pck_working_df" in st.session_state:
                 st.markdown("##### Interactive Packing Line Sheet")
                 with st.form("packing_matrix_form"):
@@ -728,11 +722,11 @@ with t_pck:
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Sequential Packing List"] = pck_link
-                        save_log_data(df_update)
-                        st.success("✅ Packing Manifest locked!")
-st.cache_data.clear()
-                
-with t_dut:
+                        if save_log_data(df_update):
+                            st.cache_data.clear()
+                            st.success("✅ Packing Manifest locked!")
+
+        with t_dut:
             if st.button("⚙️ Preview Customs Summary"): 
                 st.session_state["h_dut"] = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
             if "h_dut" in st.session_state: 
@@ -746,9 +740,9 @@ with t_dut:
                         df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes)
                         idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
                         df_update.at[idx, "Official Duties Assessment"] = dut_link
-                        save_log_data(df_update)
-                        st.success("✅ Customs Summary locked!")
-st.cache_data.clear()
+                        if save_log_data(df_update):
+                            st.cache_data.clear()
+                            st.success("✅ Customs Summary locked!")
 
 # ==========================================
 # 6. NEW ADMIN RENDERERS
@@ -798,7 +792,6 @@ def render_client_admin():
                 except Exception as e:
                     st.warning(f"Saved locally, but missing 'Clients' tab on Google Sheet to sync: {e}")
 
-
 # ==========================================
 # 7. TOP NAVIGATION & WORKSPACE ROUTER
 # ==========================================
@@ -842,6 +835,7 @@ with col_create:
             
             df_new = pd.concat([df_current, pd.DataFrame([blank_row])], ignore_index=True)
             if save_log_data(df_new):
+                st.cache_data.clear()
                 st.session_state["active_shell_uid"] = new_uid
                 st.toast("Empty Workspace Shell successfully generated!", icon="✅")
                 st.rerun()
