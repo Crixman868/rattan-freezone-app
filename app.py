@@ -636,7 +636,7 @@ def render_admin_tracker():
                         st.success("✅ Commercial Invoice locked!")
 st.cache_data.clear()
                 
-        with t_car:
+with t_car:
             orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
             
             with st.expander("📝 Customs Compliance Details (CARICOM)", expanded=True):
