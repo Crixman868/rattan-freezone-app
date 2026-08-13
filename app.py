@@ -96,8 +96,14 @@ ALL_COUNTRIES = [
     "Indonesia", "Turkey", "Philippines", "Ireland", "Other"
 ]
 
-SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment"]
-EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
+SYSTEM_DOCS = [
+    "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", 
+    "Official Duties Assessment", "Warehouse Delivery Note", "Finance Cost Statement"
+]
+EXTERNAL_DOCS = [
+    "Bill of Lading Scan", "Original Invoice", "Original Packing List", 
+    "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"
+]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
 LOG_COLUMNS = [
@@ -107,7 +113,8 @@ LOG_COLUMNS = [
     "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", 
     "Other Documents", "Miscellaneous Supporting Doc",
     "Subtotal (USD)", "Import Duties (TTD)", "Customs Deposit (TTD)", "Import VAT Paid (TTD)",
-    "Additional Port Charges (TTD)", "Brokerage & Clearance Fees (TTD)", "Management Fees (TTD)"
+    "Additional Port Charges (TTD)", "Brokerage & Clearance Fees (TTD)", "Management Fees (TTD)",
+    "Warehouse Delivery Note", "Finance Cost Statement"
 ]
 
 # ==========================================
@@ -519,13 +526,13 @@ def render_master_log():
                 with c_f6: new_mgmt = st.text_input("Management Fees ($ TTD)", value=str(row.get("Management Fees (TTD)", "")), key=f"mgmt_{idx}")
 
                 st.write("---")
-                st.subheader("Document Vault (10-Slot Matrix)")
+                st.subheader("Document Vault (12-Slot Matrix)")
                 
-                grid = st.columns(5)
+                grid = st.columns(6)
                 upload_cache = {} 
 
                 for i, slot in enumerate(ALL_DOCS):
-                    with grid[i % 5]:
+                    with grid[i % 6]:
                         st.markdown(f"**{slot}**")
                         file_link = str(row.get(slot, ""))
                         
@@ -598,7 +605,15 @@ def render_master_log():
                             html_fin = generate_finance_cost_statement_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str, sub_usd, fr_usd, dut_ttd, dep_ttd, vat_ttd, port_ttd, brok_ttd, mgmt_ttd)
                             fin_link = upload_system_pdf_to_drive(html_fin, f"{(inv_no if inv_no.strip() else row_uid)}_Finance_Cost_Statement.pdf", client_name, inv_no if inv_no.strip() else row_uid)
                             
-                            st.success("✅ Delivery Note & Finance Cost Statement generated and saved to Drive!")
+                            # Save links back to Google Sheets
+                            df_update = load_log_data()
+                            row_index = df_update.index[df_update['Row_UID'].astype(str).str.strip() == row_uid.strip()].tolist()[0]
+                            df_update.at[row_index, "Warehouse Delivery Note"] = wh_link
+                            df_update.at[row_index, "Finance Cost Statement"] = fin_link
+                            
+                            if save_log_data(df_update):
+                                st.success("✅ Delivery Note & Finance Cost Statement generated, linked, and saved to Drive!")
+                                st.rerun()
 
 def render_admin_tracker():
     st.title("📦 Command Console: Master Tracker")
