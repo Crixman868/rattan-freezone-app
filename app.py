@@ -15,107 +15,50 @@ from google.oauth2.credentials import Credentials as HumanCredentials
 from googleapiclient.http import MediaFileUpload
 
 # ==========================================
-# 1. GLOBAL SETUP & CSS (CRIMSON FLOW V2)
+# 1. GLOBAL SETUP & CSS (CRIMSON FLOW V2 WITH LOGOS)
 # ==========================================
 st.set_page_config(page_title="Rattan Freezone Logistics", page_icon="🚢", layout="wide")
 
-st.markdown("""
-<style>
-    /* Base Background */
-    .stApp { background-color: #f8fafc; color: #1e293b; }
-    
-    /* 🔴 Crimson Flow V2 - Slim Centered Header */
-    .custom-header {
-        background: linear-gradient(135deg, #e60000 0%, #8b0000 100%);
-        color: white;
-        padding: 20px 30px;
-        border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 20px;
-        margin-top: 10px;
-    }
-    .custom-header::after {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%; width: 50%; height: 100%;
-        background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
-        transform: skewX(-25deg);
-        animation: shine 6s infinite;
-    }
-    @keyframes shine {
-        0% { left: -100%; }
-        20% { left: 200%; }
-        100% { left: 200%; }
-    }
-    .header-title {
-        font-family: 'Arial', sans-serif;
-        font-size: 30px;
-        font-weight: 900;
-        letter-spacing: 2px;
-        margin: 0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    .header-subtitle {
-        color: #fecaca;
-        font-size: 14px;
-        margin: 0;
-        margin-top: 6px;
-        font-weight: 500;
-        letter-spacing: 1px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-    }
-    .header-badge {
-        background-color: #ffffff;
-        color: #dc2626;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-weight: 800;
-        font-size: 11px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-        letter-spacing: 0.5px;
-    }
-    
-    /* Expander Styling */
-    [data-testid="stExpander"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0;
-        border-top: 4px solid #dc2626;
-        border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.04);
-        margin-bottom: 15px;
-    }
-    [data-testid="stExpander"] summary p {
-        font-weight: 700 !important;
-        color: #1e293b !important;
-        font-size: 1.02rem !important;
-    }
-    [data-testid="stExpander"] p, 
-    [data-testid="stExpander"] h3, 
-    [data-testid="stExpander"] h4, 
-    [data-testid="stExpander"] h5 {
-        color: #1e293b !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+def get_img_b64(path):
+    if os.path.exists(path):
+        with open(path, "rb") as f: return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+    return None
 
-# Render Custom Header
-st.markdown("""
+left_logo_b64 = get_img_b64("logo_left.png")
+right_logo_b64 = get_img_b64("logo_right.png")
+
+left_img_tag = f'<img src="{left_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if left_logo_b64 else ''
+right_img_tag = f'<img src="{right_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if right_logo_b64 else ''
+
+st.markdown(f"""
+<style>
+    .stApp {{ background-color: #f8fafc; color: #1e293b; }}
+    .custom-header {{
+        background: linear-gradient(135deg, #e60000 0%, #8b0000 100%);
+        color: white; padding: 20px 30px; border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
+        display: flex; justify-content: space-between; align-items: center;
+        position: relative; overflow: hidden; margin-bottom: 20px; margin-top: 10px;
+    }
+    .header-center {{ display: flex; flex-direction: column; align-items: center; text-align: center; flex-grow: 1; }}
+    .header-title {{ font-family: 'Arial', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 2px; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
+    .header-subtitle {{ color: #fecaca; font-size: 13px; margin: 0; margin-top: 4px; font-weight: 500; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; }}
+    .header-badge {{ background-color: #ffffff; color: #dc2626; padding: 2px 8px; border-radius: 20px; font-weight: 800; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }}
+    [data-testid="stExpander"] {{
+        background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626;
+        border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px;
+    }
+    [data-testid="stExpander"] summary p {{ font-weight: 700 !important; color: #1e293b !important; font-size: 1.02rem !important; }}
+    [data-testid="stExpander"] p, [data-testid="stExpander"] h3, [data-testid="stExpander"] h4, [data-testid="stExpander"] h5 {{ color: #1e293b !important; }}
+</style>
+
 <div class="custom-header">
-    <h1 class="header-title">RATTAN FREEZONE</h1>
-    <p class="header-subtitle">
-        Pennywise Plaza | East Chaguanas
-        <span class="header-badge">VAT REG# 202049</span>
-    </p>
+    <div>{left_img_tag}</div>
+    <div class="header-center">
+        <h1 class="header-title">RATTAN FREEZONE</h1>
+        <p class="header-subtitle">Pennywise Plaza | East Chaguanas <span class="header-badge">VAT REG# 202049</span></p>
+    </div>
+    <div>{right_img_tag}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -184,13 +127,10 @@ def load_log_data():
     try: 
         ws = get_gspread_client().open_by_url(SHEET_URL).sheet1
         rows = ws.get_all_values()
-        
         if not rows or len(rows) < 2: return pd.DataFrame(columns=LOG_COLUMNS)
-        
         headers = rows[0]
         data = rows[1:]
         df = pd.DataFrame(data, columns=headers, dtype=object)
-        
         for col in LOG_COLUMNS:
             if col not in df.columns: df[col] = ""
         return df
@@ -202,10 +142,8 @@ def save_log_data(df):
     try:
         ws = get_gspread_client().open_by_url(SHEET_URL).sheet1
         ws.clear()
-        
         df = df.copy()
         for col in df.columns: df[col] = df[col].astype(str).replace(['nan', 'None'], '')
-            
         for col in LOG_COLUMNS:
             if col not in df.columns: df[col] = ""
         df = df[LOG_COLUMNS]
@@ -232,28 +170,23 @@ def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
             temp_pdf_path = temp_pdf.name
-            
         with open(temp_pdf_path, "w+b") as result_file:
             pisa_status = pisa.CreatePDF(html_content, dest=result_file)
-            
         if pisa_status.err:
             if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
             return "Upload Failed"
         
         pdf_media = MediaFileUpload(temp_pdf_path, mimetype='application/pdf', resumable=True)
         existing_files = drive.files().list(q=f"name='{file_name}' and '{inv_folder_id}' in parents and trashed=false", fields="files(id, webViewLink)").execute().get('files', [])
-        
         if existing_files:
             file_id = existing_files[0]['id']
             final_pdf = drive.files().update(fileId=file_id, media_body=pdf_media, fields='id, webViewLink').execute()
         else:
             pdf_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             final_pdf = drive.files().create(body=pdf_metadata, media_body=pdf_media, fields='id, webViewLink').execute()
-        
         if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
         return final_pdf.get('webViewLink', 'Upload Failed')
-    except Exception as e:
-        return "Upload Failed"
+    except Exception as e: return "Upload Failed"
 
 def upload_physical_file_to_drive(uploaded_file, file_name, client_name, invoice_no):
     if not uploaded_file: return None
@@ -275,14 +208,12 @@ def upload_physical_file_to_drive(uploaded_file, file_name, client_name, invoice
             
         media = MediaFileUpload(temp_path, resumable=True)
         existing_files = drive.files().list(q=f"name='{file_name}' and '{inv_folder_id}' in parents and trashed=false", fields="files(id, webViewLink)").execute().get('files', [])
-        
         if existing_files:
             file_id = existing_files[0]['id']
             file = drive.files().update(fileId=file_id, media_body=media, fields='id, webViewLink').execute()
         else:
             file_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             file = drive.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        
         if os.path.exists(temp_path): os.remove(temp_path)
         return file.get('webViewLink')
     except Exception as e: return None
@@ -327,7 +258,6 @@ def save_supplier_mapping(supplier, desc, qty, price):
 # ==========================================
 # 4. DOCUMENT GENERATORS
 # ==========================================
-
 def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path, orientation, primary_hex):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
     template = env.get_template("caricom_template.html")
@@ -352,12 +282,10 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
         sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
         rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
-    
     elif is_duties:
         duty_data = duty_data or {}
         img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
         rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
-    
     else:
         template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
         chosen_template = s_profile.get("Template", "classic.html")
@@ -385,7 +313,6 @@ def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_prof
             "freight": (f"{freight:,.2f}" if freight else None), "grand_total": f"{(total_val + (freight or 0)):,.2f}", "items": items
         })
         rendered_html = re.sub(r'>\$\s*<', '><', rendered_html)
-
     return rendered_html
 
 def generate_warehouse_delivery_note_html(inv_no, container_no, bl_no, total_cartons, date_str):
@@ -402,7 +329,6 @@ def display_html_preview(raw_html):
 # ==========================================
 # 5. APP VIEWS
 # ==========================================
-
 def render_master_log():
     st.subheader("📋 Cargo Tracker & Vault")
     df = load_log_data()
@@ -439,7 +365,6 @@ def render_master_log():
             
             naldo_val = str(row.get("NALDO", "No")).strip().upper()
             
-            # APPROVED HEADER FORMAT
             header_text = (f"📦 TOTAL CTNS: {total_cartons} | {status_label} | ETA: {current_date} | "
                            f"Container #: {display_cont} | B/L Number: {display_bl} | "
                            f"INV: {display_inv} | Origin: {display_origin} | Lodged: {display_lodged}")
@@ -480,7 +405,6 @@ def render_master_log():
                     with grid[i % 6]:
                         st.markdown(f"**{slot}**")
                         file_link = str(row.get(slot, ""))
-                        
                         if file_link.startswith("http"):
                             clean_link = file_link
                             match = re.search(r'/d/([a-zA-Z0-9_-]+)', file_link)
@@ -490,14 +414,12 @@ def render_master_log():
                             st.link_button("📄 View Document", url=clean_link, key=f"view_{idx}_{i}", use_container_width=True)
                         else:
                             st.button("Pending Upload", disabled=True, key=f"pend_{idx}_{i}", use_container_width=True)
-                        
                         if slot in EXTERNAL_DOCS:
                             uploaded_file = st.file_uploader(f"Upload {slot}", key=f"up_{idx}_{i}", label_visibility="collapsed")
                             if uploaded_file: upload_cache[slot] = uploaded_file
                 
                 st.write("---")
                 m_btn1, m_btn2 = st.columns(2)
-                
                 with m_btn1:
                     if st.button("💾 Save Shipment Updates", key=f"save_{idx}", type="primary", use_container_width=True):
                         with st.spinner("Processing updates..."):
@@ -512,7 +434,6 @@ def render_master_log():
                             df_update.at[row_index, "B/L Number"] = str(new_bl).strip()
                             df_update.at[row_index, "Freight"] = str(new_freight).strip()
                             df_update.at[row_index, "Subtotal (USD)"] = str(new_subtotal).strip()
-                            
                             df_update.at[row_index, "Import Duties (TTD)"] = str(new_duties).strip()
                             df_update.at[row_index, "Customs Deposit (TTD)"] = str(new_deposit).strip()
                             df_update.at[row_index, "Import VAT Paid (TTD)"] = str(new_vat).strip()
@@ -566,7 +487,6 @@ def render_admin_tracker():
         return
 
     df_current = load_log_data()
-    
     match_row = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
@@ -574,7 +494,6 @@ def render_admin_tracker():
     def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, inv_date, bl_num, freight_val, cargo_notes, subtotal_val=0.00):
         df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
         matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
-        
         if matches:
             idx = matches[0]
             df_active.at[idx, "Client Name"] = str(c_name)
@@ -610,7 +529,6 @@ def render_admin_tracker():
 
     with col1:
         st.markdown("#### Data Intake & Matrix Mapping")
-        
         client_val = get_val("Client Name", "Select a Client...")
         client_idx = client_options.index(client_val) if client_val in client_options else 0
         client_name = st.selectbox("Client Workspace", client_options, index=client_idx)
@@ -664,7 +582,6 @@ def render_admin_tracker():
 
     with col2:
         st.markdown("#### Targeted Document Generation (Save Independently)")
-        
         df_clean = pd.DataFrame(columns=["Description", "Qty", "UnitPrice", "Total Foreign (USD)"])
         subtotal_foreign = 0.00
         freight_dec = to_decimal(freight_cost)
@@ -674,7 +591,6 @@ def render_admin_tracker():
         if uploaded_file and map_description != "-- Select --" and map_qty != "-- Select --" and map_price != "-- Select --":
             df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
             df_clean.columns = ["Description", "Qty", "UnitPrice"]
-            
             df_clean["Description"] = df_clean["Description"].astype(str)
             df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
             df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
@@ -733,7 +649,6 @@ def render_admin_tracker():
 
             if st.button("⚙️ Preview CARICOM"): 
                 st.session_state["h_car"] = generate_caricom_printout(invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, payment_terms, additional_notes, signatory_position, comp_data, logo_path, sig_path, orientation, supplier_profile.get("PrimaryHex", "#000000"))
-            
             if "h_car" in st.session_state: 
                 display_html_preview(st.session_state["h_car"])
                 if st.button("💾 Save CARICOM Invoice Only", type="primary", use_container_width=True):
@@ -801,7 +716,6 @@ def render_admin_tracker():
 # ==========================================
 # 6. TOP NAVIGATION & WORKSPACE ROUTER
 # ==========================================
-
 if "active_module" not in st.session_state:
     st.session_state["active_module"] = "📋 Cargo Tracker & Vault"
 
@@ -814,13 +728,11 @@ with col_nav2:
 st.write("---")
 
 col_create, col_select = st.columns([1, 2])
-
 with col_create:
     if st.button("➕ Create Empty Shipment Shell", type="primary", use_container_width=True):
         with st.spinner("Initializing Workspace Shell..."):
             df_current = load_log_data()
             new_uid = f"UID-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
             blank_row = {col: "" for col in LOG_COLUMNS}
             blank_row["Row_UID"] = new_uid
             blank_row["Invoice No"] = ""
@@ -842,16 +754,13 @@ with col_create:
 with col_select:
     df_dropdown = load_log_data()
     dropdown_options = ["-- Choose Active Workspace --"]
-    
     if not df_dropdown.empty:
         for _, r in df_dropdown.iterrows():
             r_uid = str(r.get("Row_UID", "")).strip()
             s_id = str(r.get("Invoice No", "")).strip()
             s_ctns = str(r.get("Total Cartons", "")).strip()
             s_client = str(r.get("Client Name", "")).strip()
-            
             if not r_uid: continue
-            
             display_name = s_id if s_id.strip() else "[Blank Entry]"
             label = f"[{r_uid}] INV: {display_name}"
             if s_client: label += f" | Client: {s_client}"
@@ -863,7 +772,6 @@ with col_select:
     default_sel_idx = matching_indices[0] if matching_indices and current_target_uid else 0
 
     selected_option = st.selectbox("Select Target Workspace", dropdown_options, index=default_sel_idx, label_visibility="collapsed")
-    
     if selected_option != "-- Choose Active Workspace --":
         match = re.search(r'\[(.*?)\]', selected_option)
         if match: st.session_state["active_shell_uid"] = match.group(1)
@@ -871,7 +779,6 @@ with col_select:
 
 st.write("---")
 
-# --- CORE APPLICATION EXECUTION ---
 if st.session_state["active_module"] == "📋 Cargo Tracker & Vault":
     render_master_log()
 elif st.session_state["active_module"] == "📦 Shipment Document Hub":

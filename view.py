@@ -1,49 +1,56 @@
 import streamlit as st
 import pandas as pd
+import os
+import base64
 import gspread
 import json
 import re
 from datetime import datetime
 
-# ==========================================
-# 1. GLOBAL SETUP & CSS (CRIMSON FLOW V2)
-# ==========================================
 st.set_page_config(page_title="Rattan Viewer | Read-Only", page_icon="👁️", layout="wide")
 
-st.markdown("""
+def get_img_b64(path):
+    if os.path.exists(path):
+        with open(path, "rb") as f: return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+    return None
+
+left_logo_b64 = get_img_b64("logo_left.png")
+right_logo_b64 = get_img_b64("logo_right.png")
+
+left_img_tag = f'<img src="{left_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if left_logo_b64 else ''
+right_img_tag = f'<img src="{right_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if right_logo_b64 else ''
+
+st.markdown(f"""
 <style>
-    .stApp { background-color: #f8fafc; color: #1e293b; }
-    .custom-header {
+    .stApp {{ background-color: #f8fafc; color: #1e293b; }}
+    .custom-header {{
         background: linear-gradient(135deg, #e60000 0%, #8b0000 100%);
         color: white; padding: 20px 30px; border-radius: 12px;
         box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        text-align: center; position: relative; overflow: hidden; margin-bottom: 20px; margin-top: 10px;
+        display: flex; justify-content: space-between; align-items: center;
+        position: relative; overflow: hidden; margin-bottom: 20px; margin-top: 10px;
     }
-    .custom-header::after {
-        content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
-        background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
-        transform: skewX(-25deg); animation: shine 6s infinite;
+    .header-center {{ display: flex; flex-direction: column; align-items: center; text-align: center; flex-grow: 1; }}
+    .header-title {{ font-family: 'Arial', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 2px; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
+    .header-subtitle {{ color: #fecaca; font-size: 13px; margin: 0; margin-top: 4px; font-weight: 500; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; }}
+    .header-badge {{ background-color: #ffffff; color: #dc2626; padding: 2px 8px; border-radius: 20px; font-weight: 800; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }}
+    [data-testid="stExpander"] {{
+        background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626;
+        border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px;
     }
-    @keyframes shine { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }
-    .header-title { font-family: 'Arial', sans-serif; font-size: 30px; font-weight: 900; letter-spacing: 2px; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-    .header-subtitle { color: #fecaca; font-size: 14px; margin: 0; margin-top: 6px; font-weight: 500; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 12px; }
-    .header-badge { background-color: #ffffff; color: #dc2626; padding: 3px 10px; border-radius: 20px; font-weight: 800; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); letter-spacing: 0.5px; }
-    [data-testid="stExpander"] { background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px; }
-    [data-testid="stExpander"] summary p { font-weight: 700 !important; color: #1e293b !important; font-size: 1.02rem !important; }
+    [data-testid="stExpander"] summary p {{ font-weight: 700 !important; color: #1e293b !important; font-size: 1.02rem !important; }}
 </style>
-""", unsafe_allow_html=True)
 
-st.markdown("""
 <div class="custom-header">
-    <h1 class="header-title">RATTAN FREEZONE</h1>
-    <p class="header-subtitle">Pennywise Plaza | East Chaguanas <span class="header-badge">VAT REG# 202049</span></p>
+    <div>{left_img_tag}</div>
+    <div class="header-center">
+        <h1 class="header-title">RATTAN FREEZONE</h1>
+        <p class="header-subtitle">Pennywise Plaza | East Chaguanas <span class="header-badge">VAT REG# 202049</span></p>
+    </div>
+    <div>{right_img_tag}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. CONSTANTS & GOOGLE CONNECTION
-# ==========================================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Rcifpu4GRFAYFPQNBGrl96DpHXDiQM1JYys-Dhi0rrU/edit?usp=sharing"
 
 SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment", "Warehouse Delivery Note", "Finance Cost Statement"]
@@ -79,9 +86,6 @@ def get_eta_status(eta_date, shipment_status):
         return "🟢 IN TRANSIT"
     except: return "TBD"
 
-# ==========================================
-# 3. READ-ONLY DISPLAY
-# ==========================================
 st.subheader("👁️ Live Logistics Viewer (Read-Only)")
 
 df = load_log_data()
