@@ -114,7 +114,7 @@ LOG_COLUMNS = [
     "Other Documents", "Miscellaneous Supporting Doc",
     "Subtotal (USD)", "Import Duties (TTD)", "Customs Deposit (TTD)", "Import VAT Paid (TTD)",
     "Additional Port Charges (TTD)", "Brokerage & Clearance Fees (TTD)", "Management Fees (TTD)",
-    "Warehouse Delivery Note", "Finance Cost Statement"
+    "Warehouse Delivery Note", "Finance Cost Statement", "Invoice Date"
 ]
 
 # ==========================================
@@ -503,7 +503,7 @@ def render_master_log():
                 col1, col2, col3, col4, col5, col6 = st.columns(6)
                 with col1: new_cont = st.text_input("Container #", value=str(row.get("Container #", "")), key=f"cont_{idx}")
                 with col2: new_orig = st.selectbox("Country of Origin", ALL_COUNTRIES, index=ALL_COUNTRIES.index(row.get("Country of Origin", "")) if row.get("Country of Origin", "") in ALL_COUNTRIES else 0, key=f"orig_{idx}")
-                with col3: new_eta = st.date_input("ETA", value=current_date, key=f"eta_{idx}")
+                with col3: new_eta = st.date_input("ETA (Container Arrival)", value=current_date, key=f"eta_{idx}")
                 with col4: new_lodg = st.radio("Lodged", ["Yes", "No"], index=0 if row.get("Lodged Status") == "Yes" else 1, horizontal=True, key=f"lodged_{idx}")
                 with col5: new_stat = st.selectbox("Shipment Status", ["Active", "Delivered"], index=0 if ship_status != "Delivered" else 1, key=f"stat_{idx}")
                 with col6: new_naldo = st.radio("NALDO Code", ["Yes", "No"], index=0 if naldo_val == "YES" else 1, horizontal=True, key=f"naldo_{idx}")
@@ -629,7 +629,7 @@ def render_admin_tracker():
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
 
-    def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, date, bl_num, freight_val, cargo_notes, subtotal_val=0.00):
+    def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, inv_date, bl_num, freight_val, cargo_notes, subtotal_val=0.00):
         df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
         matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
         
@@ -637,7 +637,7 @@ def render_admin_tracker():
             idx = matches[0]
             df_active.at[idx, "Client Name"] = str(c_name)
             df_active.at[idx, "Total Cartons"] = str(ctns)
-            df_active.at[idx, "ETA"] = str(date)
+            df_active.at[idx, "Invoice Date"] = str(inv_date).strip()
             df_active.at[idx, "Invoice No"] = str(inv_num).strip()
             df_active.at[idx, "B/L Number"] = str(bl_num).strip()
             df_active.at[idx, "Freight"] = str(freight_val).strip()
@@ -650,7 +650,7 @@ def render_admin_tracker():
             new_row["Invoice No"] = str(inv_num).strip()
             new_row["Client Name"] = str(c_name)
             new_row["Total Cartons"] = str(ctns)
-            new_row["ETA"] = str(date)
+            new_row["Invoice Date"] = str(inv_date).strip()
             new_row["Shipment Status"] = "Active"
             new_row["B/L Number"] = str(bl_num).strip()
             new_row["Freight"] = str(freight_val).strip()
@@ -701,7 +701,7 @@ def render_admin_tracker():
         cx1, cx2 = st.columns(2)
         with cx1:
             invoice_num = st.text_input("Invoice Number", value=get_val("Invoice No", ""))
-            invoice_date = st.text_input("Invoice Date / ETA", value=get_val("ETA", datetime.now().strftime("%Y-%m-%d")))
+            invoice_date = st.text_input("Invoice Date", value=get_val("Invoice Date", datetime.now().strftime("%Y-%m-%d")))
             bl_number = st.text_input("Bill of Lading (BL#)", value=get_val("B/L Number", ""))
             payment_terms = st.selectbox("Terms", ["NET 90 Days", "NET 45 Days", "NET 30 Days"])
             special_indicator = st.selectbox("Shipment Type", ["Standard", "Express", "Maritime Direct"])
