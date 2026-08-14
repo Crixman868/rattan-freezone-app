@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import os
-pd.options.mode.string_storage = "python"  # PREVENTS PYARROW LINUX SEGFAULT
+pd.options.mode.string_storage = "python"  
 import base64
 import gspread
 import json
@@ -39,7 +39,7 @@ st.markdown(f"""
         box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
         display: flex; justify-content: space-between; align-items: center;
         position: relative; overflow: hidden; margin-bottom: 20px; margin-top: 10px;
-    }
+    }}
     .header-center {{ display: flex; flex-direction: column; align-items: center; text-align: center; flex-grow: 1; }}
     .header-title {{ font-family: 'Arial', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 2px; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
     .header-subtitle {{ color: #fecaca; font-size: 13px; margin: 0; margin-top: 4px; font-weight: 500; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; }}
