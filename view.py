@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components  # Make sure this is imported!
 import pandas as pd
 import os
 import base64
@@ -17,6 +18,27 @@ def get_img_b64(path):
 
 left_logo_b64 = get_img_b64("logo_left.png")
 right_logo_b64 = get_img_b64("logo_right.png")
+
+# --- INJECT CUSTOM APP INSTALL ICON (LOGO LEFT ONLY) ---
+if left_logo_b64:
+    components.html(f"""
+    <script>
+        const doc = window.parent.document;
+        
+        // 1. Overwrite existing shortcut icons
+        let icons = doc.querySelectorAll('link[rel="shortcut icon"], link[rel="icon"], link[rel="apple-touch-icon"]');
+        icons.forEach(icon => icon.href = '{left_logo_b64}');
+        
+        // 2. Force inject an Apple Touch Icon if one doesn't exist
+        let appleIcon = doc.querySelector('link[rel="apple-touch-icon"]');
+        if (!appleIcon) {{
+            appleIcon = doc.createElement('link');
+            appleIcon.rel = 'apple-touch-icon';
+            appleIcon.href = '{left_logo_b64}';
+            doc.head.appendChild(appleIcon);
+        }}
+    </script>
+    """, height=0, width=0)
 
 # LOGOS SET TO 120PX, NO MARGINS SO THEY TOUCH THE TOP/BOTTOM OF THE BANNER
 left_img_tag = f'<img src="{left_logo_b64}" style="height: 120px; border-radius: 12px; object-fit: contain; display: block;">' if left_logo_b64 else ''
