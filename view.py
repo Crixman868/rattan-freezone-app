@@ -7,7 +7,8 @@ import json
 import re
 from datetime import datetime
 
-st.set_page_config(page_title="Rattan Viewer | Read-Only", page_icon="👁️", layout="wide")
+# UPDATED TAB TITLE AND CUSTOM ICON
+st.set_page_config(page_title="Rattan's Logistics", page_icon="logo_left.png", layout="wide")
 
 def get_img_b64(path):
     if os.path.exists(path):
@@ -17,23 +18,31 @@ def get_img_b64(path):
 left_logo_b64 = get_img_b64("logo_left.png")
 right_logo_b64 = get_img_b64("logo_right.png")
 
-left_img_tag = f'<img src="{left_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if left_logo_b64 else ''
-right_img_tag = f'<img src="{right_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if right_logo_b64 else ''
+# LOGOS SET TO 120PX, NO MARGINS SO THEY TOUCH THE TOP/BOTTOM OF THE BANNER
+left_img_tag = f'<img src="{left_logo_b64}" style="height: 120px; border-radius: 12px; object-fit: contain; display: block;">' if left_logo_b64 else ''
+right_img_tag = f'<img src="{right_logo_b64}" style="height: 120px; border-radius: 12px; object-fit: contain; display: block;">' if right_logo_b64 else ''
 
 st.markdown(f"""
 <style>
     .stApp {{ background-color: #f8fafc; color: #1e293b; }}
     .custom-header {{
         background: linear-gradient(135deg, #e60000 0%, #8b0000 100%);
-        color: white; padding: 20px 30px; border-radius: 12px;
+        color: white; 
+        padding: 0px 30px; /* REMOVED TOP AND BOTTOM PADDING TO HUG LOGOS */
+        border-radius: 12px;
         box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
         display: flex; justify-content: space-between; align-items: center;
         position: relative; overflow: hidden; margin-bottom: 20px; margin-top: 10px;
     }}
     .header-center {{ display: flex; flex-direction: column; align-items: center; text-align: center; flex-grow: 1; }}
-    .header-title {{ font-family: 'Arial', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 2px; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
-    .header-subtitle {{ color: #fecaca; font-size: 13px; margin: 0; margin-top: 4px; font-weight: 500; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; gap: 10px; }}
-    .header-badge {{ background-color: #ffffff; color: #dc2626; padding: 2px 8px; border-radius: 20px; font-weight: 800; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }}
+    .header-title {{ 
+        font-family: 'Arial', sans-serif; 
+        font-size: 46px; /* MASSIVELY INCREASED FONT SIZE */
+        font-weight: 900; 
+        letter-spacing: 3px; 
+        margin: 0; 
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3); 
+    }}
     [data-testid="stExpander"] {{
         background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626;
         border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px;
@@ -45,7 +54,6 @@ st.markdown(f"""
     <div>{left_img_tag}</div>
     <div class="header-center">
         <h1 class="header-title">RATTAN FREEZONE</h1>
-        <p class="header-subtitle">Pennywise Plaza | East Chaguanas <span class="header-badge">VAT REG# 202049</span></p>
     </div>
     <div>{right_img_tag}</div>
 </div>
@@ -86,7 +94,8 @@ def get_eta_status(eta_date, shipment_status):
         return "🟢 IN TRANSIT"
     except: return "TBD"
 
-st.subheader("👁️ Live Logistics Viewer (Read-Only)")
+# UPDATED SUBHEADER
+st.subheader("📋 Cargo Tracker & Vault")
 
 df = load_log_data()
 
@@ -143,7 +152,6 @@ else:
             c4.caption("B/L Number")
             c4.write(f"**{bl_no or 'Pending'}**")
 
-            # 3-column split for better spacing
             c5, c6, c7 = st.columns(3)
             c5.caption("Origin Country")
             c5.write(f"**{origin_no or 'N/A'}**")
@@ -152,7 +160,6 @@ else:
             c7.caption("Current Status")
             c7.write(f"**{ship_status}**")
             
-            # FULL-WIDTH CARGO NOTES ROW
             st.caption("Cargo Notes")
             st.write(f"*{cargo_notes or 'None'}*")
 
