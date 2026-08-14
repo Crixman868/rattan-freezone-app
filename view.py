@@ -17,7 +17,6 @@ def get_img_b64(path):
 left_logo_b64 = get_img_b64("logo_left.png")
 right_logo_b64 = get_img_b64("logo_right.png")
 
-# INCREASED LOGO HEIGHT TO 110px TO FILL THE BANNER
 left_img_tag = f'<img src="{left_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if left_logo_b64 else ''
 right_img_tag = f'<img src="{right_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if right_logo_b64 else ''
 
@@ -144,15 +143,18 @@ else:
             c4.caption("B/L Number")
             c4.write(f"**{bl_no or 'Pending'}**")
 
-            c5, c6, c7, c8 = st.columns(4)
+            # 3-column split for better spacing
+            c5, c6, c7 = st.columns(3)
             c5.caption("Origin Country")
             c5.write(f"**{origin_no or 'N/A'}**")
             c6.caption("NALDO Code")
             c6.write(f"**{naldo_val or 'No'}**")
             c7.caption("Current Status")
             c7.write(f"**{ship_status}**")
-            c8.caption("Cargo Notes")
-            c8.write(f"*{cargo_notes or 'None'}*")
+            
+            # FULL-WIDTH CARGO NOTES ROW
+            st.caption("Cargo Notes")
+            st.write(f"*{cargo_notes or 'None'}*")
 
             st.write("---")
             st.markdown("#### 💰 Financial Overview (USD & Post-Clearance TTD)")
