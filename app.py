@@ -482,22 +482,33 @@ def render_master_log():
                 continue 
                 
             inv_no = str(row.get('Invoice No', ''))
-            display_inv = inv_no if inv_no.strip() else "[Blank Entry]"
+            display_inv = inv_no.strip() if inv_no.strip() else "[Blank Entry]"
             client_name = str(row.get('Client Name', 'Unknown Client'))
             ship_status = str(row.get("Shipment Status", "Active"))
             total_cartons = str(row.get("Total Cartons", "0"))
             
+            cont_no = str(row.get("Container #", "")).strip()
+            display_cont = cont_no if cont_no else ""
+            
+            bl_no = str(row.get("B/L Number", "")).strip()
+            display_bl = bl_no if bl_no else ""
+            
+            origin_no = str(row.get("Country of Origin", "")).strip()
+            display_origin = origin_no if origin_no else ""
+            
+            lodged_val = str(row.get("Lodged Status", "")).strip()
+            display_lodged = lodged_val if lodged_val else ""
+
             raw_eta = row.get("ETA")
             timestamp = pd.to_datetime(raw_eta, errors='coerce')
             current_date = timestamp.date() if not pd.isna(timestamp) else datetime.now().date()
             status_label, _ = get_eta_status(current_date, ship_status)
             
             naldo_val = str(row.get("NALDO", "No")).strip().upper()
-            naldo_display = f"🔴 NALDO: YES" if naldo_val == "YES" else f"⚪ NALDO: NO"
             
             header_text = (f"📦 TOTAL CTNS: {total_cartons} | {status_label} | ETA: {current_date} | "
-                           f"Client: {client_name} | Origin: {row.get('Country of Origin', 'N/A')} | "
-                           f"Lodged: {row.get('Lodged Status', 'N/A')} | {naldo_display} | INV: {display_inv}")
+                           f"Container #: {display_cont} | B/L Number: {display_bl} | "
+                           f"INV: {display_inv} | Origin: {display_origin} | Lodged: {display_lodged}")
 
             with st.expander(header_text):
                 col1, col2, col3, col4, col5, col6 = st.columns(6)
