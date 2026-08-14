@@ -17,8 +17,9 @@ def get_img_b64(path):
 left_logo_b64 = get_img_b64("logo_left.png")
 right_logo_b64 = get_img_b64("logo_right.png")
 
-left_img_tag = f'<img src="{left_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if left_logo_b64 else ''
-right_img_tag = f'<img src="{right_logo_b64}" style="height: 65px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">' if right_logo_b64 else ''
+# INCREASED LOGO HEIGHT TO 110px TO FILL THE BANNER
+left_img_tag = f'<img src="{left_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if left_logo_b64 else ''
+right_img_tag = f'<img src="{right_logo_b64}" style="height: 110px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); object-fit: contain;">' if right_logo_b64 else ''
 
 st.markdown(f"""
 <style>
@@ -97,15 +98,31 @@ else:
         row_uid = str(row.get('Row_UID', ''))
         if not row_uid.strip(): continue
         
+        # Pull all core data
         inv_no = str(row.get('Invoice No', '')).strip()
         display_inv = inv_no if inv_no else "[Blank Entry]"
+        client_name = str(row.get('Client Name', '')).strip()
+        inv_date = str(row.get('Invoice Date', '')).strip()
         ship_status = str(row.get("Shipment Status", "Active"))
         total_cartons = str(row.get("Total Cartons", "0"))
         cont_no = str(row.get("Container #", "")).strip()
         bl_no = str(row.get("B/L Number", "")).strip()
         origin_no = str(row.get("Country of Origin", "")).strip()
         lodged_val = str(row.get("Lodged Status", "")).strip()
+        naldo_val = str(row.get("NALDO", "")).strip()
+        cargo_notes = str(row.get("Cargo Notes", "")).strip()
 
+        # Pull financial data
+        freight = str(row.get("Freight", "")).strip()
+        subtotal = str(row.get("Subtotal (USD)", "")).strip()
+        duties = str(row.get("Import Duties (TTD)", "")).strip()
+        deposit = str(row.get("Customs Deposit (TTD)", "")).strip()
+        vat = str(row.get("Import VAT Paid (TTD)", "")).strip()
+        port = str(row.get("Additional Port Charges (TTD)", "")).strip()
+        brokerage = str(row.get("Brokerage & Clearance Fees (TTD)", "")).strip()
+        mgmt = str(row.get("Management Fees (TTD)", "")).strip()
+
+        # ETA Logic
         raw_eta = row.get("ETA")
         timestamp = pd.to_datetime(raw_eta, errors='coerce')
         current_date = timestamp.date() if not pd.isna(timestamp) else datetime.now().date()
@@ -118,14 +135,46 @@ else:
         with st.expander(header_text):
             st.markdown("#### 🚢 Essential Shipment Details")
             c1, c2, c3, c4 = st.columns(4)
-            c1.caption("Container Number")
-            c1.write(f"**{cont_no or 'Pending'}**")
-            c2.caption("B/L Number")
-            c2.write(f"**{bl_no or 'Pending'}**")
-            c3.caption("Origin Country")
-            c3.write(f"**{origin_no or 'N/A'}**")
-            c4.caption("Current Status")
-            c4.write(f"**{ship_status}**")
+            c1.caption("Client Name")
+            c1.write(f"**{client_name or 'N/A'}**")
+            c2.caption("Invoice Date")
+            c2.write(f"**{inv_date or 'N/A'}**")
+            c3.caption("Container Number")
+            c3.write(f"**{cont_no or 'Pending'}**")
+            c4.caption("B/L Number")
+            c4.write(f"**{bl_no or 'Pending'}**")
+
+            c5, c6, c7, c8 = st.columns(4)
+            c5.caption("Origin Country")
+            c5.write(f"**{origin_no or 'N/A'}**")
+            c6.caption("NALDO Code")
+            c6.write(f"**{naldo_val or 'No'}**")
+            c7.caption("Current Status")
+            c7.write(f"**{ship_status}**")
+            c8.caption("Cargo Notes")
+            c8.write(f"*{cargo_notes or 'None'}*")
+
+            st.write("---")
+            st.markdown("#### 💰 Financial Overview (USD & Post-Clearance TTD)")
+            f1, f2, f3, f4 = st.columns(4)
+            f1.caption("Subtotal (USD)")
+            f1.write(f"**${subtotal or '0.00'}**")
+            f2.caption("Freight (USD)")
+            f2.write(f"**${freight or '0.00'}**")
+            f3.caption("Import Duties (TTD)")
+            f3.write(f"**${duties or '0.00'}**")
+            f4.caption("Customs Deposit (TTD)")
+            f4.write(f"**${deposit or '0.00'}**")
+
+            f5, f6, f7, f8 = st.columns(4)
+            f5.caption("Import VAT Paid (TTD)")
+            f5.write(f"**${vat or '0.00'}**")
+            f6.caption("Add. Port Charges (TTD)")
+            f6.write(f"**${port or '0.00'}**")
+            f7.caption("Brokerage Fees (TTD)")
+            f7.write(f"**${brokerage or '0.00'}**")
+            f8.caption("Management Fees (TTD)")
+            f8.write(f"**${mgmt or '0.00'}**")
             
             st.write("---")
             st.markdown("#### 📑 Secure Document Vault")
