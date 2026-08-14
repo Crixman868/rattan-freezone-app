@@ -37,7 +37,7 @@ st.markdown(f"""
     [data-testid="stExpander"] {{
         background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626;
         border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px;
-    }
+    }}
     [data-testid="stExpander"] summary p {{ font-weight: 700 !important; color: #1e293b !important; font-size: 1.02rem !important; }}
 </style>
 

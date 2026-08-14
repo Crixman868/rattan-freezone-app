@@ -47,7 +47,7 @@ st.markdown(f"""
     [data-testid="stExpander"] {{
         background-color: #ffffff !important; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626;
         border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); margin-bottom: 15px;
-    }
+    }}
     [data-testid="stExpander"] summary p {{ font-weight: 700 !important; color: #1e293b !important; font-size: 1.02rem !important; }}
     [data-testid="stExpander"] p, [data-testid="stExpander"] h3, [data-testid="stExpander"] h4, [data-testid="stExpander"] h5 {{ color: #1e293b !important; }}
 </style>
@@ -227,11 +227,6 @@ def get_eta_status(eta_date, shipment_status):
         if 8 <= days_diff <= 14: return "🟡 APPROACHING", "#FFD700"
         return "🟢 IN TRANSIT", "#008000"
     except: return "TBD", "#808080"
-
-def get_img_b64(path):
-    if os.path.exists(path):
-        with open(path, "rb") as f: return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
-    return None
 
 def get_entity_profile(file_name, entity_name):
     profile = {"Name": entity_name, "Address": "Main Office Hub", "Template": "classic.html"}
