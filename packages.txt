@@ -7,3 +7,4 @@ libopenjp2-7-dev
 libffi-dev
 shared-mime-info
 fontconfig
+wkhtmltopdf
