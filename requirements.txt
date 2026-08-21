@@ -6,3 +6,7 @@ google-auth
 openpyxl
 xhtml2pdf
 extra-streamlit-components
+jinja2
+pdfkit
+google-auth-httplib2
+google-auth-oauthlib
