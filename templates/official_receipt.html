@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; color: #333; font-size: 14px; }
+        .header { border-bottom: 2px solid #22543d; padding-bottom: 15px; margin-bottom: 20px; }
+        .company-title { font-size: 22px; font-weight: bold; color: #22543d; }
+        .doc-title { font-size: 18px; font-weight: bold; text-align: right; color: #22543d; }
+        .grid { display: table; width: 100%; margin-bottom: 20px; }
+        .col { display: table-cell; width: 50%; vertical-align: top; }
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table.data-table th { background: #22543d; color: white; padding: 10px; text-align: left; }
+        table.data-table td { padding: 10px; border-bottom: 1px solid #ddd; }
+        .status-badge { 
+            display: inline-block; 
+            padding: 8px 16px; 
+            background: #276749; 
+            color: white; 
+            font-size: 16px; 
+            font-weight: bold; 
+            border-radius: 4px; 
+            margin-top: 15px; 
+        }
+        .summary-table { width: 50%; float: right; margin-top: 20px; border-collapse: collapse; }
+        .summary-table td { padding: 8px; }
+        .zero-balance { background: #22543d; color: white; font-weight: bold; font-size: 15px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="grid">
+            <div class="col">
+                {% if issuer.logo_path %}
+                    <img src="{{ issuer.logo_path }}" style="max-height: 60px; display: block; margin-bottom: 5px;"><br>
+                {% endif %}
+                <div class="company-title">{{ issuer.Company_Name }}</div>
+                <div>{{ issuer.Registered_Address }}</div>
+            </div>
+            <div class="col doc-title">
+                OFFICIAL PAYMENT RECEIPT
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="col">
+            <strong>RECEIVED FROM:</strong><br>
+            {{ recipient.Company_Name }}<br>
+            {{ recipient.Registered_Address }}
+        </div>
+        <div class="col" style="text-align: right;">
+            <strong>Receipt Date:</strong> {{ issue_date }}<br>
+            <strong>B/L Number:</strong> {{ bl_no }}<br>
+            <strong>Container No:</strong> {{ container_no }}
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Payment & Settlement Details</th>
+                <th style="text-align: right;">Amount (TTD)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <strong>Final Net Settlement Payment</strong>
+                </td>
+                <td style="text-align: right; vertical-align: top;">${{ amount_paid | currency }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div style="float: left; width: 45%;">
+        <div class="status-badge">✓ PAID IN FULL</div>
+        <p style="font-size: 12px; color: #4a5568; margin-top: 10px;">
+            This receipt confirms full and final financial discharge of the Master Tax Invoice for B/L {{ bl_no }}. Settlement is inclusive of all in contra credits (foreign supplier credit settlement & pre-funded advance port deposits), statutory port outlays, and integrated agency management fees.
+        </p>
+    </div>
+
+    <table class="summary-table">
+        <tr>
+            <td>Final Cash Payment Received:</td>
+            <td style="text-align: right;">${{ amount_paid | currency }}</td>
+        </tr>
+        <tr class="zero-balance">
+            <td>ACCOUNT BALANCE REMAINING:</td>
+            <td style="text-align: right;">$0.00 TTD</td>
+        </tr>
+    </table>
+</body>
+</html>

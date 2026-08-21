@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; color: #333; font-size: 14px; }
+        .header { border-bottom: 2px solid #1a365d; padding-bottom: 15px; margin-bottom: 20px; }
+        .company-title { font-size: 22px; font-weight: bold; color: #1a365d; }
+        .doc-title { font-size: 18px; font-weight: bold; text-align: right; color: #1a365d; }
+        .grid { display: table; width: 100%; margin-bottom: 20px; }
+        .col { display: table-cell; width: 50%; vertical-align: top; }
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table.data-table th { background: #1a365d; color: white; padding: 10px; text-align: left; }
+        table.data-table td { padding: 9px; border-bottom: 1px solid #ddd; }
+        .section-header { background: #edf2f7; font-weight: bold; color: #2d3748; }
+        .summary-table { width: 60%; float: right; margin-top: 20px; border-collapse: collapse; }
+        .summary-table td { padding: 8px; }
+        .contra-box { background: #f7fafc; border: 1px solid #cbd5e0; }
+        .net-due { background: #1a365d; color: white; font-weight: bold; font-size: 15px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="grid">
+            <div class="col">
+                {% if issuer.logo_path %}
+                    <img src="{{ issuer.logo_path }}" style="max-height: 60px; display: block; margin-bottom: 5px;"><br>
+                {% endif %}
+                <div class="company-title">{{ issuer.Company_Name }}</div>
+                <div>{{ issuer.Registered_Address }}</div>
+            </div>
+            <div class="col doc-title">MASTER TAX INVOICE</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="col">
+            <strong>BILLED TO:</strong><br>
+            {{ recipient.Company_Name }}<br>
+            {{ recipient.Registered_Address }}
+        </div>
+        <div class="col" style="text-align: right;">
+            <strong>Date:</strong> {{ issue_date }}<br>
+            <strong>B/L Number:</strong> {{ bl_no }}<br>
+            <strong>Container No:</strong> {{ container_no }}<br>
+            <strong>Status:</strong> Delivered & Reconciled
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Shipment & Service Line Items</th>
+                <th style="text-align: right;">Amount (TTD)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="section-header">
+                <td colspan="2">SECTION 1: FOREIGN CARGO & FREIGHT VALUE</td>
+            </tr>
+            <tr>
+                <td style="padding-left: 20px;">
+                    • Foreign Commercial Cargo & Freight Valuation<br>
+                    <small style="color: #4a5568;">USD Value: ${{ usd_cargo_val | currency }} USD @ Exchange Rate: {{ "%.2f"|format(exchange_rate) }} TTD/USD</small>
+                </td>
+                <td style="text-align: right; vertical-align: top;">${{ ttd_cargo_val | currency }}</td>
+            </tr>
+            <tr class="section-header">
+                <td colspan="2">SECTION 2: STATUTORY PORT OUTLAYS</td>
+            </tr>
+            {% for item in port_items %}
+            <tr>
+                <td style="padding-left: 20px;">• {{ item.desc }}</td>
+                <td style="text-align: right;">${{ item.amount | currency }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="section-header">
+                <td colspan="2">SECTION 3: AGENCY & INTEGRATED FREIGHT SERVICES</td>
+            </tr>
+            <tr>
+                <td style="padding-left: 20px;">• Customs Clearance Agency & Integrated Freight Management</td>
+                <td style="text-align: right;">${{ bundled_service_fee | currency }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="summary-table">
+        <tr>
+            <td>Total Foreign Cargo Value (TTD):</td>
+            <td style="text-align: right;">${{ ttd_cargo_val | currency }}</td>
+        </tr>
+        <tr>
+            <td>Total Statutory Port Outlays:</td>
+            <td style="text-align: right;">${{ total_port_outlays | currency }}</td>
+        </tr>
+        <tr>
+            <td>Integrated Clearance & Haulage Fee:</td>
+            <td style="text-align: right;">${{ bundled_service_fee | currency }}</td>
+        </tr>
+        <tr>
+            <td>Output VAT (12.5% on Services):</td>
+            <td style="text-align: right;">${{ service_vat | currency }}</td>
+        </tr>
+        <tr style="border-top: 2px solid #333; font-weight: bold;">
+            <td>GROSS SHIPMENT OBLIGATION:</td>
+            <td style="text-align: right;">${{ gross_shipment_total | currency }}</td>
+        </tr>
+        <tr class="contra-box">
+            <td><em>IN CONTRA SETTLEMENT:</em> Foreign Supplier Direct Settlement</td>
+            <td style="text-align: right; color: #c53030; font-weight: bold;">-${{ ttd_cargo_val | currency }}</td>
+        </tr>
+        <tr class="contra-box">
+            <td><em>IN CONTRA SETTLEMENT:</em> Pre-Funded Advance Port Deposit</td>
+            <td style="text-align: right; color: #c53030; font-weight: bold;">-${{ contra_deposit_paid | currency }}</td>
+        </tr>
+        <tr class="net-due">
+            <td>NET CONTRA BALANCE PAYABLE:</td>
+            <td style="text-align: right;">${{ net_contra_due | currency }} TTD</td>
+        </tr>
+    </table>
+</body>
+</html>

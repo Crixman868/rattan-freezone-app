@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; color: #333; font-size: 14px; }
+        .header { border-bottom: 2px solid #2b6cb0; padding-bottom: 15px; margin-bottom: 20px; }
+        .company-title { font-size: 20px; font-weight: bold; color: #2b6cb0; }
+        .doc-title { font-size: 18px; font-weight: bold; text-align: right; color: #2b6cb0; }
+        .grid { display: table; width: 100%; margin-bottom: 20px; }
+        .col { display: table-cell; width: 50%; vertical-align: top; }
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table.data-table th { background: #2b6cb0; color: white; padding: 8px; text-align: left; }
+        table.data-table td { padding: 8px; border-bottom: 1px solid #ddd; }
+        .total-table { width: 40%; float: right; margin-top: 15px; }
+        .total-table td { padding: 6px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="grid">
+            <div class="col">
+                {% if issuer.logo_path %}
+                    <img src="{{ issuer.logo_path }}" style="max-height: 60px; display: block; margin-bottom: 5px;"><br>
+                {% endif %}
+                <div class="company-title">{{ issuer.Company_Name }}</div>
+                <div>{{ issuer.Registered_Address }}</div>
+            </div>
+            <div class="col doc-title">TAX INVOICE</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="col">
+            <strong>CLIENT:</strong><br>
+            {{ recipient.Company_Name }}<br>
+            {{ recipient.Registered_Address }}
+        </div>
+        <div class="col" style="text-align: right;">
+            <strong>Date:</strong> {{ issue_date }}<br>
+            <strong>B/L Number:</strong> {{ bl_no }}<br>
+            <strong>Container No:</strong> {{ container_no }}
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Service Description</th>
+                <th style="text-align: right;">Amount (TTD)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Customs Brokerage, Port Handling & Transport Execution</td>
+                <td style="text-align: right;">${{ freight_fee | currency }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="total-table">
+        <tr>
+            <td>Subtotal:</td>
+            <td style="text-align: right;">${{ freight_fee | currency }}</td>
+        </tr>
+        <tr>
+            <td>VAT (12.5%):</td>
+            <td style="text-align: right;">${{ vat_amount | currency }}</td>
+        </tr>
+        <tr style="font-weight: bold; border-top: 2px solid #333;">
+            <td>Total Due:</td>
+            <td style="text-align: right;">${{ total_due | currency }}</td>
+        </tr>
+    </table>
+</body>
+</html>
