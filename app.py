@@ -12,10 +12,13 @@ import tempfile
 from datetime import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as HumanCredentials
+from google.oauth2.service_account import Credentials as BotCredentials
 from googleapiclient.http import MediaFileUpload
 
+import pdf_engine
+
 # ==========================================
-# 1. GLOBAL SETUP & CSS (CRIMSON FLOW V2 WITH LOGOS)
+# 1. GLOBAL SETUP & CSS
 # ==========================================
 st.set_page_config(page_title="Rattan Freezone Logistics", page_icon="🚢", layout="wide")
 
@@ -55,16 +58,14 @@ st.markdown(f"""
 <div class="custom-header">
     <div>{left_img_tag}</div>
     <div class="header-center">
-        <h1 class="header-title">RATTAN FREEZONE</h1>
+        <h1 class="header-title">RATTAN FREEZONE LOGISTICS</h1>
         <p class="header-subtitle">Pennywise Plaza | East Chaguanas <span class="header-badge">VAT REG# 202049</span></p>
     </div>
     <div>{right_img_tag}</div>
 </div>
 """, unsafe_allow_html=True)
 
-COMPANY_LOGO_PATH = "company_logo.png"
-
-for folder in ["uploaded_docs", "logos", "signatures", "watermarks", "templates"]:
+for folder in ["uploaded_docs", "logos", "signatures", "watermarks", "templates", "generated_documents"]:
     if not os.path.exists(folder): os.makedirs(folder)
 
 def to_decimal(val):
@@ -106,10 +107,9 @@ LOG_COLUMNS = [
 ]
 
 # ==========================================
-# 3. HELPER FUNCTIONS
+# 3. GOOGLE CLOUD & DRIVE SERVICE FUNCTIONS
 # ==========================================
 def get_gspread_client():
-    from google.oauth2.service_account import Credentials as BotCredentials
     creds_dict = json.loads(st.secrets["google_api"]["credentials"])
     creds = BotCredentials.from_service_account_info(
         creds_dict, 
@@ -153,6 +153,49 @@ def save_log_data(df):
     except Exception as e:
         st.error(f"Failed to sync with Google Sheets: {e}")
         return False
+
+def sync_local_pdf_to_google_drive(local_pdf_path, client_name, bl_number):
+    if not os.path.exists(local_pdf_path):
+        return None, "Local file not found on disk."
+        
+    try:
+        drive = get_drive_service()
+        file_name = os.path.basename(local_pdf_path)
+        safe_client_name = str(client_name).replace("'", "\\'")
+        safe_bl_number = str(bl_number).replace("'", "\\'")
+        
+        folders = drive.files().list(
+            q=f"name='{safe_client_name}' and '{ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            fields="files(id, name)"
+        ).execute().get('files', [])
+        client_folder_id = folders[0]['id'] if folders else drive.files().create(
+            body={"name": client_name, "parents": [ROOT_FOLDER_ID], "mimeType": "application/vnd.google-apps.folder"}
+        ).execute()['id']
+        
+        bl_folders = drive.files().list(
+            q=f"name='{safe_bl_number}' and '{client_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+            fields="files(id, name)"
+        ).execute().get('files', [])
+        bl_folder_id = bl_folders[0]['id'] if bl_folders else drive.files().create(
+            body={"name": str(bl_number), "parents": [client_folder_id], "mimeType": "application/vnd.google-apps.folder"}
+        ).execute()['id']
+        
+        media = MediaFileUpload(local_pdf_path, mimetype='application/pdf', resumable=True)
+        existing_files = drive.files().list(
+            q=f"name='{file_name}' and '{bl_folder_id}' in parents and trashed=false",
+            fields="files(id, webViewLink)"
+        ).execute().get('files', [])
+        
+        if existing_files:
+            file_id = existing_files[0]['id']
+            final_file = drive.files().update(fileId=file_id, media_body=media, fields='id, webViewLink').execute()
+        else:
+            file_metadata = {'name': file_name, 'parents': [bl_folder_id]}
+            final_file = drive.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+            
+        return final_file.get('webViewLink'), None
+    except Exception as e:
+        return None, str(e)
 
 def upload_system_pdf_to_drive(html_content, file_name, client_name, invoice_no):
     if not html_content: return "Pending Upload"
@@ -250,79 +293,213 @@ def save_supplier_mapping(supplier, desc, qty, price):
     df = pd.concat([df, pd.DataFrame([{"Supplier": supplier, "DescCol": desc, "QtyCol": qty, "PriceCol": price}])], ignore_index=True)
     df.to_csv("supplier_mappings.csv", index=False)
 
-# ==========================================
-# 4. DOCUMENT GENERATORS
-# ==========================================
-def generate_caricom_printout(inv_num, date, client_name, client_address, supplier_name, supplier_address, bl, total_ctns, subtotal, freight, grand_total, payment_terms, additional_notes, signatory_position, compliance_data, logo_path, sig_path, orientation, primary_hex):
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
-    template = env.get_template("caricom_template.html")
-    return template.render(
-        inv_num=inv_num, date=date, client_name=client_name, client_address=client_address,
-        supplier_name=supplier_name, supplier_address=supplier_address, bl=bl, total_ctns=total_ctns,
-        subtotal=f"{subtotal:,.2f}", freight=f"{freight:,.2f}", grand_total=f"{grand_total:,.2f}", 
-        payment_terms=payment_terms, additional_notes=additional_notes, 
-        signatory_position=signatory_position, compliance_data=compliance_data, 
-        logo_path=logo_path, sig_path=sig_path, orientation=orientation, primary_hex=primary_hex
-    )
-
-def generate_html_document(title, inv_no, date, client, c_addr, supplier, s_profile, bl, total_ctns, df, total_val, freight=None, additional_notes="", payment_terms="", signatory_position="", is_packing=False, is_duties=False, duty_data=None):
-    logo_path = get_img_b64(f"logos/{s_profile.get('Name', '')}_logo.png")
-    sig_path = get_img_b64(f"signatures/{s_profile.get('Name', '')}_sig.png")
-
-    if is_packing:
-        table_rows = ""
-        for idx, row in df.iterrows():
-            qty = safe_qty_parse(row.get("QUANTITY", 0))
-            table_rows += f'<tr><td style="padding:10px; border:1px solid #ccc;">{row.get("SPECIFICATION OF COMMODITIES","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("CTNS NOS","N/A")}</td><td style="padding:10px; border:1px solid #ccc; text-align:center;">{row.get("TOTAL CTNS",0)}</td><td style="padding:10px; border:1px solid #ccc; text-align:right;">{qty:,}</td></tr>'
-        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
-        sig_tag = f'<img src="{sig_path}" height="80">' if sig_path else ''
-        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Exporter:</b> {supplier}<br><b>Consignee:</b> {client}<br>{c_addr}</p><table border="1" width="100%" cellspacing="0" cellpadding="5"><thead><tr bgcolor="#f7f7f7"><th>Description</th><th>Carton Nos</th><th>Total Ctns</th><th>Qty</th></tr></thead><tbody>{table_rows}</tbody></table><br><br><div align="right">{sig_tag}<br><b>{signatory_position}</b></div></body></html>'
-    elif is_duties:
-        duty_data = duty_data or {}
-        img_tag = f'<img src="{logo_path}" height="40">' if logo_path else ''
-        rendered_html = f'<html><head><style>@page {{ margin: 20mm; }} body {{ font-family: Arial, sans-serif; color: #333333; }}</style></head><body><table width="100%" style="border: none;"><tr><td style="border: none;">{img_tag}</td><td align="right" style="border: none;"><h2>{title}</h2></td></tr></table><p><b>Invoice:</b> {inv_no}</p><p>Converted Base Value: ${duty_data.get("convert_to_ttd",0):,.2f} TTD</p><p>Customs Duty: ${duty_data.get("duty_owed",0):,.2f} TTD</p><p>VAT Owed: ${duty_data.get("vat_owed",0):,.2f} TTD</p><br><table border="1" width="100%" cellspacing="0" cellpadding="10"><tr><td bgcolor="#f9f9f9"><h3>Total Customs Bill Due: ${duty_data.get("grand_total_ttd",0):,.2f} TTD</h3></td></tr></table></body></html>'
-    else:
-        template_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="./templates"))
-        chosen_template = s_profile.get("Template", "classic.html")
-        if not os.path.exists(f"./templates/{chosen_template}"): chosen_template = "classic.html"
-        try: template = template_env.get_template(chosen_template)
-        except: template = template_env.from_string("<h1>{{title}}</h1><p><b>Exporter:</b> {{supplier_name}}<br><b>Consignee:</b> {{client_name}}</p><table border='1' width='100%' cellspacing='0' cellpadding='5'><thead><tr bgcolor='#f2f2f2'><th>Description</th><th>Qty</th><th>Total</th></tr></thead><tbody>{% for item in items %}<tr><td>{{item.Description}}</td><td>{{item.Qty}}</td><td>{{item.Total}}</td></tr>{% endfor %}</tbody></table>")
-
-        items = []
-        for idx, row in df.iterrows():
-            desc = str(row["Description"])[:250]
-            parsed_qty = safe_qty_parse(row.get('Qty', 0))
-            qty = f"{parsed_qty:,}" if parsed_qty else ""
-            try: price = f"{float(row.get('UnitPrice', 0)):.2f}" if pd.notna(row.get('UnitPrice')) else ""
-            except ValueError: price = ""
-            try: total = f"{float(row.get('Total Foreign (USD)', 0)):.2f}" if pd.notna(row.get('Total Foreign (USD)')) else ""
-            except ValueError: total = ""
-            items.append({"Description": desc, "Qty": qty, "UnitPrice": price, "Total": total})
-            
-        rendered_html = template.render({
-            "title": title, "inv_no": inv_no, "date": date, "client_name": client, "client_address": c_addr, 
-            "supplier_name": supplier, "supplier_address": s_profile.get("Address", "Main Office Hub"), 
-            "bl": bl, "total_ctns": total_ctns, "payment_terms": payment_terms, "additional_notes": additional_notes, 
-            "primary_hex": s_profile.get("PrimaryHex", "#0A2240"), "logo_path": logo_path, "sig_path": sig_path, 
-            "signatory_position": signatory_position, "subtotal": f"{total_val:,.2f}", 
-            "freight": (f"{freight:,.2f}" if freight else None), "grand_total": f"{(total_val + (freight or 0)):,.2f}", "items": items
-        })
-        rendered_html = re.sub(r'>\$\s*<', '><', rendered_html)
-    return rendered_html
-
-def generate_warehouse_delivery_note_html(inv_no, container_no, bl_no, total_cartons, date_str):
-    return f"""<html><head><style>@page {{ margin: 15mm; }} body {{ font-family: Arial, sans-serif; color: #1e293b; line-height: 1.5; }} .header {{ border-bottom: 3px solid #dc2626; padding-bottom: 10px; margin-bottom: 20px; }} .title {{ font-size: 24px; font-weight: bold; color: #dc2626; }} .info-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }} .info-table td, .info-table th {{ padding: 12px; border: 1px solid #cbd5e1; font-size: 14px; text-align: left; }} .info-table th {{ background-color: #f1f5f9; }} .sign-box {{ margin-top: 40px; border-top: 1px dashed #94a3b8; padding-top: 15px; }}</style></head><body><div class="header"><div class="title">📦 WAREHOUSE DELIVERY NOTE</div><div><b>RATTAN FREEZONE LOGISTICS</b> | Pennywise Plaza, East Chaguanas</div><div><b>Date:</b> {date_str}</div></div><p>Official release manifest for cargo transfer to receiving warehouse.</p><table class="info-table"><tr><th>Invoice Reference #</th><td><b>{inv_no}</b></td></tr><tr><th>Container Number</th><td><b>{container_no}</b></td></tr><tr><th>Bill of Lading (B/L)</th><td><b>{bl_no}</b></td></tr><tr><th>Total Cartons / Packages</th><td><b style="font-size: 18px; color: #dc2626;">{total_cartons} CTNS</b></td></tr></table><div class="sign-box"><p><b>Warehouse Receiving Acknowledgment:</b></p><br><br><p>Received By (Print Name): ___________________________ Signature: ___________________________ Date: ____________</p></div></body></html>"""
-
-def generate_finance_cost_statement_html(inv_no, container_no, bl_no, total_cartons, date_str, subtotal_usd, freight_usd, duties_ttd, deposit_ttd, vat_ttd, port_ttd, brokerage_ttd, mgmt_ttd):
-    total_ttd_fees = duties_ttd + deposit_ttd + vat_ttd + port_ttd + brokerage_ttd + mgmt_ttd
-    return f"""<html><head><style>@page {{ margin: 15mm; }} body {{ font-family: Arial, sans-serif; color: #1e293b; line-height: 1.4; }} .header {{ border-bottom: 3px solid #0f172a; padding-bottom: 10px; margin-bottom: 20px; }} .title {{ font-size: 22px; font-weight: bold; color: #0f172a; }} .cost-table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }} .cost-table td, .cost-table th {{ padding: 10px; border: 1px solid #cbd5e1; font-size: 13px; }} .cost-table th {{ background-color: #f8fafc; text-align: left; }} .total-row {{ background-color: #f1f5f9; font-weight: bold; font-size: 15px; }}</style></head><body><div class="header"><div class="title">📊 FINANCE DEPARTMENT COST STATEMENT</div><div><b>RATTAN FREEZONE LOGISTICS</b> | Landed Cost Reconciliation</div><div><b>Execution Date:</b> {date_str}</div></div><p><b>Shipment Reference:</b> INV: {inv_no} | Container: {container_no} | B/L: {bl_no} | Total Cartons: {total_cartons}</p><table class="cost-table"><thead><tr><th>Cost Category / Item Description</th><th>Currency</th><th style="text-align: right;">Amount</th></tr></thead><tbody><tr><td>Commercial Invoice Subtotal</td><td>USD</td><td style="text-align: right;">${subtotal_usd:,.2f}</td></tr><tr><td>Ocean Freight Charges</td><td>USD</td><td style="text-align: right;">${freight_usd:,.2f}</td></tr><tr><td>Import Duties Paid</td><td>TTD</td><td style="text-align: right;">${duties_ttd:,.2f}</td></tr><tr><td>Customs Security Deposit</td><td>TTD</td><td style="text-align: right;">${deposit_ttd:,.2f}</td></tr><tr><td>Import VAT Paid</td><td>TTD</td><td style="text-align: right;">${vat_ttd:,.2f}</td></tr><tr><td>Additional Port & Terminal Charges</td><td>TTD</td><td style="text-align: right;">${port_ttd:,.2f}</td></tr><tr><td>Brokerage & Customs Clearance Fees</td><td>TTD</td><td style="text-align: right;">${brokerage_ttd:,.2f}</td></tr><tr><td>Management & Administrative Fees</td><td>TTD</td><td style="text-align: right;">${mgmt_ttd:,.2f}</td></tr><tr class="total-row"><td colspan="2">TOTAL LOCAL CLEARANCE & DUTY EXPENSES</td><td style="text-align: right; color: #dc2626;">${total_ttd_fees:,.2f} TTD</td></tr></tbody></table><br><p style="font-size: 11px; color: #64748b;">Note: Foreign currency amounts (USD) require conversion at approved bank exchange rate on payment date.</p></body></html>"""
-
 def display_html_preview(raw_html):
     preview_html = f'<div style="background-color: white; padding: 40px; margin: 10px auto; border-radius: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); max-width: 900px; color: #333333;">{raw_html}</div>'
     components.html(preview_html, height=750, scrolling=True)
 
 # ==========================================
-# 5. APP VIEWS
+# 4. NOMINATED AGENCY PORTAL (MODULE 3)
+# ==========================================
+def render_document_workspace(doc_title, doc_filename, bl_no, generate_callback, key_prefix, entity_client_name="Corinthian Pins Limited"):
+    st.markdown(f"### {doc_title}")
+    
+    shipment_dir = os.path.join(pdf_engine.OUTPUT_DIR, str(bl_no).strip())
+    file_path = os.path.join(shipment_dir, doc_filename)
+    
+    col_gen, col_status = st.columns([1, 2])
+    with col_gen:
+        if st.button(f"⚙️ Generate / Refresh {doc_title}", key=f"btn_gen_{key_prefix}", type="primary", use_container_width=True):
+            filepath = generate_callback()
+            st.success(f"Generated successfully: `{os.path.basename(filepath)}`")
+            st.rerun()
+
+    if os.path.exists(file_path):
+        st.markdown("---")
+        with open(file_path, "rb") as f:
+            pdf_bytes = f.read()
+            base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+
+        c_dl, c_vault = st.columns(2)
+        with c_dl:
+            st.download_button(
+                label=f"📥 Download {doc_title} (PDF)",
+                data=pdf_bytes,
+                file_name=os.path.basename(file_path),
+                mime="application/pdf",
+                key=f"dl_{key_prefix}",
+                use_container_width=True
+            )
+        with c_vault:
+            if st.button(f"☁️ Save to Vault / Google Drive", key=f"vault_{key_prefix}", use_container_width=True):
+                with st.spinner("Synchronizing document to Google Drive Vault..."):
+                    drive_url, err_msg = sync_local_pdf_to_google_drive(file_path, entity_client_name, bl_no)
+                    if drive_url:
+                        st.session_state[f"vault_link_{key_prefix}"] = drive_url
+                        st.session_state[f"vault_status_{key_prefix}"] = True
+                    else:
+                        st.error(f"Vault Upload Failed: {err_msg}")
+
+        if st.session_state.get(f"vault_status_{key_prefix}"):
+            drive_link = st.session_state.get(f"vault_link_{key_prefix}", "#")
+            st.success("✅ Saved and synchronized to Cloud Vault!")
+            st.link_button("🔗 Open Document in Google Drive", url=drive_link, use_container_width=True)
+
+        st.markdown("##### 👁️ Document Preview")
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf" style="border: 1px solid #cbd5e0; border-radius: 6px;"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
+    else:
+        st.info(f"ℹ️ {doc_title} has not been generated yet for B/L **{bl_no}**. Click the button above to generate.")
+
+def render_nominated_agency_portal():
+    st.subheader("🏛️ Nominated Agency Supply Chain Portal")
+    st.caption("Corinthian Pins Limited | Trinidad Freight Solutions Limited | Rattans Freezone Limited")
+    st.divider()
+
+    st.markdown("#### 1. Shipment & Port Outlay Details")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        bl_no = st.text_input("Bill of Lading (B/L) No.", value="BL-2026-001", key="nom_bl")
+        container_no = st.text_input("Container No.", value="CNTR-40912", key="nom_cntr")
+        shipment_status = st.selectbox(
+            "Operational Shipment Status",
+            [
+                "Pre-Clearance (Pending Deposit)",
+                "Cleared & In Transit to Freezone",
+                "Delivered (Draft / Reconciliation Pending)",
+                "Delivered (Finalized & Reconciled)"
+            ],
+            key="nom_status"
+        )
+
+    with col2:
+        usd_cargo_val = st.number_input("Foreign Cargo Valuation (USD)", value=50000.00, step=1000.00, key="nom_usd")
+        exchange_rate = st.number_input("Exchange Rate (TTD/USD)", value=6.80, step=0.01, key="nom_fx")
+        ttd_cargo_val = usd_cargo_val * exchange_rate
+        st.info(f"Converted TTD Cargo Value: **${ttd_cargo_val:,.2f} TTD**")
+
+    with col3:
+        bundled_service_fee = st.number_input("Corinthian Bundled Agency Fee (TTD)", value=25000.00, step=500.00, key="nom_fee")
+        contra_deposit_paid = st.number_input("Pre-Funded Advance Port Deposit (TTD)", value=30000.00, step=1000.00, key="nom_dep")
+
+    st.divider()
+
+    st.markdown("#### 2. Itemized Statutory Port Outlays")
+    outlay_col1, outlay_col2 = st.columns(2)
+
+    with outlay_col1:
+        customs_duty = st.number_input("Customs Import Duty (TTD)", value=12000.00, step=500.00, key="nom_dut")
+        import_vat = st.number_input("Customs Import VAT (12.5%) (TTD)", value=11250.00, step=500.00, key="nom_vat")
+
+    with outlay_col2:
+        port_handling = st.number_input("Port Authority Handling & Storage (TTD)", value=4250.00, step=250.00, key="nom_port")
+        shipping_line_demurrage = st.number_input("Shipping Line Demurrage & Fees (TTD)", value=2500.00, step=250.00, key="nom_dem")
+
+    port_items = [
+        {"desc": "Customs Import Duty", "amount": customs_duty},
+        {"desc": "Customs Import VAT (12.5%)", "amount": import_vat},
+        {"desc": "Port Authority Handling & Storage", "amount": port_handling},
+        {"desc": "Shipping Line Local Demurrage & Terminal Charges", "amount": shipping_line_demurrage}
+    ]
+
+    total_port_outlays = sum(item["amount"] for item in port_items)
+    service_vat = bundled_service_fee * 0.125
+    gross_shipment_total = ttd_cargo_val + total_port_outlays + bundled_service_fee + service_vat
+    net_contra_due = gross_shipment_total - ttd_cargo_val - contra_deposit_paid
+
+    st.divider()
+
+    st.markdown("#### 3. Document Generation & Action Triggers")
+    stage1_tab, stage2_tab = st.tabs([
+        "📄 Stage 1: Pre-Clearance & Operations", 
+        "🚀 Stage 2: Post-Delivery Final Financial Discharge"
+    ])
+
+    with stage1_tab:
+        subtab_port, subtab_service, subtab_tfs = st.tabs([
+            "⚓ Advance Port Disbursement Request",
+            "💼 Service Fee Disbursement Request",
+            "🚚 Internal TFS Freight Invoice"
+        ])
+        
+        with subtab_port:
+            render_document_workspace(
+                doc_title="Advance Port Disbursement Request",
+                doc_filename=f"Disbursement_Request_Port_{bl_no}.pdf",
+                bl_no=bl_no,
+                generate_callback=lambda: pdf_engine.generate_port_disbursement_request(bl_no, container_no, port_items=port_items),
+                key_prefix="stg1_port",
+                entity_client_name="Corinthian Pins Limited"
+            )
+            
+        with subtab_service:
+            render_document_workspace(
+                doc_title="Service Fee Disbursement Request",
+                doc_filename=f"Disbursement_Request_Services_{bl_no}.pdf",
+                bl_no=bl_no,
+                generate_callback=lambda: pdf_engine.generate_service_disbursement_request(bl_no, container_no, bundled_service_fee=bundled_service_fee),
+                key_prefix="stg1_service",
+                entity_client_name="Corinthian Pins Limited"
+            )
+            
+        with subtab_tfs:
+            render_document_workspace(
+                doc_title="Internal Upstream Freight Invoice (TFS)",
+                doc_filename=f"TFS_Internal_Invoice_{bl_no}.pdf",
+                bl_no=bl_no,
+                generate_callback=lambda: pdf_engine.generate_internal_tfs_invoice(bl_no, container_no, tfs_base=5500.00),
+                key_prefix="stg1_tfs",
+                entity_client_name="Trinidad Freight Solutions Limited"
+            )
+
+    with stage2_tab:
+        if shipment_status == "Delivered (Finalized & Reconciled)":
+            st.markdown("##### Pre-Flight Settlement Audit Summary")
+            summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+            summary_col1.metric("Gross Shipment Total", f"${gross_shipment_total:,.2f} TTD")
+            summary_col2.metric("Less Foreign Contra", f"-${ttd_cargo_val:,.2f} TTD")
+            summary_col3.metric("Less Port Deposit", f"-${contra_deposit_paid:,.2f} TTD")
+            summary_col4.metric("NET BALANCE PAYABLE", f"${net_contra_due:,.2f} TTD")
+            
+            audit_confirm = st.checkbox(f"I confirm container delivery and final port outlay reconciliation for B/L {bl_no}", key="audit_nom_chk")
+            
+            if audit_confirm:
+                subtab_master, subtab_receipt = st.tabs([
+                    "🧾 Master Agency Tax Invoice",
+                    "✅ Official Payment Receipt & Account Discharge"
+                ])
+                
+                with subtab_master:
+                    render_document_workspace(
+                        doc_title="Master Agency & Disbursement Tax Invoice",
+                        doc_filename=f"Master_Tax_Invoice_{bl_no}.pdf",
+                        bl_no=bl_no,
+                        generate_callback=lambda: pdf_engine.generate_master_invoice(
+                            bl_no, container_no, 
+                            usd_cargo_val=usd_cargo_val, exchange_rate=exchange_rate, 
+                            port_items=port_items, bundled_service_fee=bundled_service_fee, 
+                            contra_deposit_paid=contra_deposit_paid
+                        ),
+                        key_prefix="stg2_master",
+                        entity_client_name="Corinthian Pins Limited"
+                    )
+                    
+                with subtab_receipt:
+                    render_document_workspace(
+                        doc_title="Official Payment Receipt & Account Discharge",
+                        doc_filename=f"Official_Receipt_{bl_no}.pdf",
+                        bl_no=bl_no,
+                        generate_callback=lambda: pdf_engine.generate_official_receipt(bl_no, container_no, amount_paid=net_contra_due),
+                        key_prefix="stg2_receipt",
+                        entity_client_name="Corinthian Pins Limited"
+                    )
+            else:
+                st.info("Check the confirmation box above to unlock final invoicing and discharge workspaces.")
+        else:
+            st.info("To generate Master Tax Invoices and Discharge Receipts, change Operational Status to **Delivered (Finalized & Reconciled)**.")
+
+# ==========================================
+# 5. CARGO TRACKER & DOCUMENT HUB VIEWS
 # ==========================================
 def render_master_log():
     st.subheader("📋 Cargo Tracker & Vault")
@@ -340,29 +517,20 @@ def render_master_log():
             client_name = str(row.get('Client Name', 'Unknown Client'))
             ship_status = str(row.get("Shipment Status", "Active"))
             total_cartons = str(row.get("Total Cartons", "0"))
-            
             cont_no = str(row.get("Container #", "")).strip()
-            display_cont = cont_no if cont_no else ""
-            
             bl_no = str(row.get("B/L Number", "")).strip()
-            display_bl = bl_no if bl_no else ""
-            
             origin_no = str(row.get("Country of Origin", "")).strip()
-            display_origin = origin_no if origin_no else ""
-            
             lodged_val = str(row.get("Lodged Status", "")).strip()
-            display_lodged = lodged_val if lodged_val else ""
 
             raw_eta = row.get("ETA")
             timestamp = pd.to_datetime(raw_eta, errors='coerce')
             current_date = timestamp.date() if not pd.isna(timestamp) else datetime.now().date()
             status_label, _ = get_eta_status(current_date, ship_status)
-            
             naldo_val = str(row.get("NALDO", "No")).strip().upper()
             
             header_text = (f"📦 TOTAL CTNS: {total_cartons} | {status_label} | ETA: {current_date} | "
-                           f"Container #: {display_cont} | B/L Number: {display_bl} | "
-                           f"INV: {display_inv} | Origin: {display_origin} | Lodged: {display_lodged}")
+                           f"Container #: {cont_no} | B/L Number: {bl_no} | "
+                           f"INV: {display_inv} | Origin: {origin_no} | Lodged: {lodged_val}")
 
             with st.expander(header_text):
                 col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -394,7 +562,7 @@ def render_master_log():
                 st.markdown("#### Document Vault (12-Slot Matrix)")
                 
                 grid = st.columns(6)
-                upload_cache = {} 
+                upload_cache = {}
 
                 for i, slot in enumerate(ALL_DOCS):
                     with grid[i % 6]:
@@ -449,7 +617,7 @@ def render_master_log():
                     if st.button("📄 Generate & Lock Post-Clearance Package", key=f"pkg_{idx}", use_container_width=True):
                         with st.spinner("Building Delivery Note & Finance Statement..."):
                             curr_date_str = datetime.now().strftime("%Y-%m-%d")
-                            html_wh = generate_warehouse_delivery_note_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str)
+                            html_wh = pdf_engine.generate_warehouse_delivery_note_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str) if hasattr(pdf_engine, 'generate_warehouse_delivery_note_html') else ""
                             wh_link = upload_system_pdf_to_drive(html_wh, f"{(inv_no if inv_no.strip() else row_uid)}_Warehouse_Delivery_Note.pdf", client_name, inv_no if inv_no.strip() else row_uid)
                             
                             sub_usd = to_decimal(new_subtotal)
@@ -461,7 +629,7 @@ def render_master_log():
                             brok_ttd = to_decimal(new_brokerage)
                             mgmt_ttd = to_decimal(new_mgmt)
                             
-                            html_fin = generate_finance_cost_statement_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str, sub_usd, fr_usd, dut_ttd, dep_ttd, vat_ttd, port_ttd, brok_ttd, mgmt_ttd)
+                            html_fin = pdf_engine.generate_finance_cost_statement_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str, sub_usd, fr_usd, dut_ttd, dep_ttd, vat_ttd, port_ttd, brok_ttd, mgmt_ttd) if hasattr(pdf_engine, 'generate_finance_cost_statement_html') else ""
                             fin_link = upload_system_pdf_to_drive(html_fin, f"{(inv_no if inv_no.strip() else row_uid)}_Finance_Cost_Statement.pdf", client_name, inv_no if inv_no.strip() else row_uid)
                             
                             df_update = load_log_data()
@@ -470,15 +638,14 @@ def render_master_log():
                             df_update.at[row_index, "Finance Cost Statement"] = fin_link
                             
                             if save_log_data(df_update):
-                                st.success("✅ Delivery Note & Finance Cost Statement generated, linked, and saved to Drive!")
+                                st.success("✅ Package linked and saved to Drive!")
                                 st.rerun()
 
 def render_admin_tracker():
     st.subheader("📦 Shipment Document Hub")
-    
     active_shell_uid = st.session_state.get("active_shell_uid", "")
     if not active_shell_uid or active_shell_uid == "-- Choose Active Workspace --":
-        st.warning("⚠️ Access Restriction: Please create or select an Active Workspace Shell from the top menu to enable data intake.")
+        st.warning("⚠️ Access Restriction: Please select an Active Workspace Shell from the top menu to enable data intake.")
         return
 
     df_current = load_log_data()
@@ -486,42 +653,12 @@ def render_admin_tracker():
     row_data = match_row.iloc[0] if not match_row.empty else {}
     def get_val(key, default=""): return row_data.get(key, default)
 
-    def sync_base_metadata_to_log(df_active, inv_num, c_name, ctns, inv_date, bl_num, freight_val, cargo_notes, subtotal_val=0.00):
-        df_active['Row_UID'] = df_active['Row_UID'].astype(str).str.strip()
-        matches = df_active.index[df_active['Row_UID'] == active_shell_uid.strip()].tolist()
-        if matches:
-            idx = matches[0]
-            df_active.at[idx, "Client Name"] = str(c_name)
-            df_active.at[idx, "Total Cartons"] = str(ctns)
-            df_active.at[idx, "Invoice Date"] = str(inv_date).strip()
-            df_active.at[idx, "Invoice No"] = str(inv_num).strip()
-            df_active.at[idx, "B/L Number"] = str(bl_num).strip()
-            df_active.at[idx, "Freight"] = str(freight_val).strip()
-            df_active.at[idx, "Cargo Notes"] = str(cargo_notes).strip()
-            if subtotal_val > 0: df_active.at[idx, "Subtotal (USD)"] = f"{subtotal_val:,.2f}"
-        else:
-            new_row = {col: "" for col in LOG_COLUMNS}
-            new_row["Row_UID"] = active_shell_uid.strip()
-            new_row["Invoice No"] = str(inv_num).strip()
-            new_row["Client Name"] = str(c_name)
-            new_row["Total Cartons"] = str(ctns)
-            new_row["Invoice Date"] = str(inv_date).strip()
-            new_row["Shipment Status"] = "Active"
-            new_row["B/L Number"] = str(bl_num).strip()
-            new_row["Freight"] = str(freight_val).strip()
-            new_row["Cargo Notes"] = str(cargo_notes).strip()
-            if subtotal_val > 0: new_row["Subtotal (USD)"] = f"{subtotal_val:,.2f}"
-            df_active = pd.concat([df_active, pd.DataFrame([new_row])], ignore_index=True)
-        return df_active
-
     client_file = "clients.csv"
     supplier_file = "suppliers.csv"
     client_options = ["Select a Client..."] + sorted(pd.read_csv(client_file)["Name"].dropna().tolist()) if os.path.exists(client_file) and os.path.getsize(client_file) > 0 else ["Select a Client..."]
     supplier_options = ["Select a Supplier..."] + sorted(pd.read_csv(supplier_file)["Name"].dropna().tolist()) if os.path.exists(supplier_file) and os.path.getsize(supplier_file) > 0 else ["Select a Supplier..."]
 
-    st.write("---")
     col1, col2 = st.columns([1, 1.3])
-
     with col1:
         st.markdown("#### Data Intake & Matrix Mapping")
         client_val = get_val("Client Name", "Select a Client...")
@@ -529,184 +666,11 @@ def render_admin_tracker():
         client_name = st.selectbox("Client Workspace", client_options, index=client_idx)
         supplier_name = st.selectbox("Supplier Profile", supplier_options)
         
-        supplier_profile = get_entity_profile("suppliers.csv", supplier_name)
-        client_profile = get_entity_profile("clients.csv", client_name)
-        
         uploaded_file = st.file_uploader("Drop Raw Vendor Spreadsheet (CSV or Excel)", type=["csv", "xlsx"])
-        saved_desc, saved_qty, saved_price = get_supplier_mapping(supplier_name)
-        map_description, map_qty, map_price = "-- Select --", "-- Select --", "-- Select --"
         
-        if uploaded_file is not None:
-            df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-            all_columns = list(df_raw.dropna(how='all').columns)
-            cm1, cm2, cm3 = st.columns(3)
-            with cm1: map_description = st.selectbox("Description Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_desc)+1 if saved_desc in all_columns else 0)
-            with cm2: map_qty = st.selectbox("Quantity Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_qty)+1 if saved_qty in all_columns else 0)
-            with cm3: map_price = st.selectbox("Unit Price Column", ["-- Select --"] + all_columns, index=all_columns.index(saved_price)+1 if saved_price in all_columns else 0)
-            if map_description != "-- Select --" and (map_description != saved_desc or map_qty != saved_qty or map_price != saved_price):
-                if st.button("Save Column Translation Matrix"):
-                    save_supplier_mapping(supplier_name, map_description, map_qty, map_price)
-                    st.success("Matrix Mapped!")
-
-        st.write("---")
-        st.markdown("#### Logistics Manifest Fields")
-        cx1, cx2 = st.columns(2)
-        with cx1:
-            invoice_num = st.text_input("Invoice Number", value=get_val("Invoice No", ""))
-            invoice_date = st.text_input("Invoice Date", value=get_val("Invoice Date", datetime.now().strftime("%Y-%m-%d")))
-            bl_number = st.text_input("Bill of Lading (BL#)", value=get_val("B/L Number", ""))
-            payment_terms = st.selectbox("Terms", ["NET 90 Days", "NET 45 Days", "NET 30 Days"])
-            special_indicator = st.selectbox("Shipment Type", ["Standard", "Express", "Maritime Direct"])
-        with cx2:
-            freight_cost = st.number_input("Ocean Freight (USD)", value=float(to_decimal(get_val("Freight", 2500.00))))
-            carton_val = safe_qty_parse(get_val("Total Cartons", 0))
-            container_total_ctns = st.number_input("Total Cartons", value=int(carton_val))
-            exchange_rate = st.number_input("Exchange Rate", value=6.77967, format="%.5f")
-            signatory_position = st.text_input("Signatory Position", value="Authorized Director")
-            
-        additional_notes = st.text_area("Cargo Notes", value=get_val("Cargo Notes", "Assorted cargo bulk manifest"))
-
-        st.markdown("#### Tariff Tax Parameters")
-        tx1, tx2 = st.columns(2)
-        with tx1: 
-            duty_percentage = st.number_input("Duty Rate (%)", value=20.0)
-            vat_percentage = st.number_input("VAT Rate (%)", value=12.5)
-        with tx2: 
-            ces_fee = st.number_input("CES Fee (TTD)", value=1050.00)
-            uf_fee = st.number_input("UF Fee (TTD)", value=80.00)
-
     with col2:
-        st.markdown("#### Targeted Document Generation (Save Independently)")
-        df_clean = pd.DataFrame(columns=["Description", "Qty", "UnitPrice", "Total Foreign (USD)"])
-        subtotal_foreign = 0.00
-        freight_dec = to_decimal(freight_cost)
-        ex_rate = float(exchange_rate)
-        duty_dict = {'exchange_rate': ex_rate, 'convert_to_ttd': 0.00, 'duty_owed': 0.00, 'vat_owed': 0.00, 'fixed_fees': float(ces_fee) + float(uf_fee), 'grand_total_ttd': 0.00}
-        
-        if uploaded_file and map_description != "-- Select --" and map_qty != "-- Select --" and map_price != "-- Select --":
-            df_clean = df_raw[[map_description, map_qty, map_price]].dropna().copy()
-            df_clean.columns = ["Description", "Qty", "UnitPrice"]
-            df_clean["Description"] = df_clean["Description"].astype(str)
-            df_clean["Qty"] = pd.to_numeric(df_clean["Qty"], errors='coerce').fillna(0).astype(int)
-            df_clean["UnitPrice"] = df_clean["UnitPrice"].apply(to_decimal)
-            df_clean["Total Foreign (USD)"] = df_clean.apply(lambda x: round(float(x['Qty']) * x['UnitPrice'], 2), axis=1)
-            subtotal_foreign = float(df_clean["Total Foreign (USD)"].sum())
-            
-            convert_to_ttd = round((subtotal_foreign + freight_dec) * ex_rate, 2)
-            duty_owed = round(convert_to_ttd * (float(duty_percentage) / 100.0), 2)
-            vat_owed = round((convert_to_ttd + duty_owed) * (float(vat_percentage) / 100.0), 2)
-            ces_fee_dec = float(ces_fee)
-            uf_fee_dec = float(uf_fee)
-            grand_total_ttd = round(duty_owed + vat_owed + ces_fee_dec + uf_fee_dec, 2)
-            
-            duty_dict = {'exchange_rate': ex_rate, 'convert_to_ttd': convert_to_ttd, 'duty_owed': duty_owed, 'vat_owed': vat_owed, 'fixed_fees': ces_fee_dec + uf_fee_dec, 'grand_total_ttd': grand_total_ttd}
-            
-            file_state_hash = f"{uploaded_file.name}_{supplier_name}_{client_name}"
-            if "active_file_hash" not in st.session_state or st.session_state["active_file_hash"] != file_state_hash:
-                st.session_state["active_file_hash"] = file_state_hash
-                base_pck_df = df_raw[[map_description, map_qty]].dropna().copy()
-                base_pck_df.columns = ["SPECIFICATION OF COMMODITIES", "QUANTITY"]
-                base_pck_df["SPECIFICATION OF COMMODITIES"] = base_pck_df["SPECIFICATION OF COMMODITIES"].astype(str)
-                base_pck_df["QUANTITY"] = pd.to_numeric(base_pck_df["QUANTITY"], errors='coerce').fillna(0).astype(int)
-                base_pck_df["TOTAL CTNS"] = 0
-                st.session_state["pck_working_df"] = base_pck_df
-
-        t_inv, t_car, t_pck, t_dut = st.tabs(["📄 Invoice", "🌐 CARICOM", "📋 Packing Manifest", "🇹🇹 Customs Audit"])
-        
-        with t_inv:
-            if st.button("⚙️ Preview Commercial Invoice"): 
-                st.session_state["h_inv"] = generate_html_document("COMMERCIAL INVOICE", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_clean, subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position)
-            if "h_inv" in st.session_state: 
-                display_html_preview(st.session_state["h_inv"])
-                if st.button("💾 Save Commercial Invoice Only", type="primary", use_container_width=True):
-                    with st.spinner("Locking Commercial Invoice PDF to Drive Vault..."):
-                        inv_link = upload_system_pdf_to_drive(st.session_state["h_inv"], f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Commercial_Invoice.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
-                        df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes, subtotal_foreign)
-                        idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
-                        df_update.at[idx, "Commercial Invoice"] = inv_link
-                        if save_log_data(df_update): st.success("✅ Commercial Invoice & Subtotal locked!")
-
-        with t_car:
-            orientation = st.radio("Document Orientation", ["portrait", "landscape"], index=1)
-            with st.expander("📝 Customs Compliance Details (CARICOM)", expanded=True):
-                cc1, cc2 = st.columns(2)
-                cust_order_no = cc1.text_input("Customer's Order No.")
-                country_origin = cc2.text_input("Country of Origin", "USA")
-                port_loading = cc1.text_input("Port of Loading")
-                port_discharge = cc2.text_input("Port of Discharge")
-                final_dest = cc1.text_input("Final Destination", "Trinidad & Tobago")
-                mode_transport = cc2.selectbox("Mode", ["SHIP", "AIR", "COURIER", "OTHER"])
-
-            comp_data = {"cust_order_no": cust_order_no, "country_origin": country_origin, "port_loading": port_loading, "port_discharge": port_discharge, "final_dest": final_dest, "mode_transport": mode_transport}
-            logo_path = get_img_b64(f"logos/{supplier_profile.get('Name', '')}_logo.png")
-            sig_path = get_img_b64(f"signatures/{supplier_profile.get('Name', '')}_sig.png")
-
-            if st.button("⚙️ Preview CARICOM"): 
-                st.session_state["h_car"] = generate_caricom_printout(invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, payment_terms, additional_notes, signatory_position, comp_data, logo_path, sig_path, orientation, supplier_profile.get("PrimaryHex", "#000000"))
-            if "h_car" in st.session_state: 
-                display_html_preview(st.session_state["h_car"])
-                if st.button("💾 Save CARICOM Invoice Only", type="primary", use_container_width=True):
-                    with st.spinner("Locking CARICOM Invoice..."):
-                        html_car_final = generate_caricom_printout(invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile.get("Address",""), bl_number, container_total_ctns, subtotal_foreign, freight_dec, subtotal_foreign + freight_dec, payment_terms, additional_notes, signatory_position, comp_data, logo_path, sig_path, orientation, supplier_profile.get("PrimaryHex", "#000000"))
-                        link = upload_system_pdf_to_drive(html_car_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_CARICOM.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
-                        df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes, subtotal_foreign)
-                        idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
-                        df_update.at[idx, "CARICOM Invoice"] = link
-                        if save_log_data(df_update): st.success("✅ CARICOM Locked!")
-
-        with t_pck:
-            if "pck_working_df" in st.session_state:
-                st.markdown("##### Interactive Packing Line Sheet")
-                with st.form("packing_matrix_form"):
-                    edited_pck_df = st.data_editor(st.session_state["pck_working_df"], disabled=["SPECIFICATION OF COMMODITIES", "QUANTITY"], key="pck_table_editor", width="stretch")
-                    submit_packing = st.form_submit_button("⚙️ Generate & Preview Packing List", type="primary")
-
-                if submit_packing:
-                    st.session_state["pck_working_df"] = edited_pck_df
-                    calculated_rows = []
-                    box_cursor = 1
-                    for idx, row in edited_pck_df.iterrows():
-                        assigned_ctns = int(row.get("TOTAL CTNS", 0))
-                        if assigned_ctns > 0:
-                            end_box = box_cursor + assigned_ctns - 1
-                            range_str = f"{box_cursor}-{end_box}" if box_cursor != end_box else f"{box_cursor}"
-                            box_cursor = end_box + 1
-                        else: range_str = "0"
-                        calculated_rows.append({"SPECIFICATION OF COMMODITIES": row["SPECIFICATION OF COMMODITIES"], "QUANTITY": row["QUANTITY"], "TOTAL CTNS": assigned_ctns, "CTNS NOS": range_str})
-                    df_p_compiled = pd.DataFrame(calculated_rows)
-                    st.session_state["df_p_compiled"] = df_p_compiled
-                    st.session_state["h_pck"] = generate_html_document("PACKING LIST MANIFEST", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, df_p_compiled, subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_packing=True)
-            else:
-                st.info("Upload and map a vendor spreadsheet to enable interactive packing validation.")
-                
-            if "h_pck" in st.session_state: 
-                display_html_preview(st.session_state["h_pck"])
-                if st.button("💾 Save Packing Manifest Only", type="primary", use_container_width=True):
-                    with st.spinner("Locking Packing Manifest PDF to Drive Vault..."):
-                        html_pck_final = generate_html_document("PACKING LIST MANIFEST", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_packing=True)
-                        pck_link = upload_system_pdf_to_drive(html_pck_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Sequential_Packing_List.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
-                        df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes, subtotal_foreign)
-                        idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
-                        df_update.at[idx, "Sequential Packing List"] = pck_link
-                        if save_log_data(df_update): st.success("✅ Packing Manifest locked!")
-
-        with t_dut:
-            if st.button("⚙️ Preview Customs Summary"): 
-                st.session_state["h_dut"] = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
-            if "h_dut" in st.session_state: 
-                display_html_preview(st.session_state["h_dut"])
-                if st.button("💾 Save Customs Summary Only", type="primary", use_container_width=True):
-                    with st.spinner("Locking Customs Summary PDF to Drive Vault..."):
-                        html_dut_final = generate_html_document("OFFICIAL DUTIES ASSESSMENT", invoice_num, invoice_date, client_name, client_profile.get("Address",""), supplier_name, supplier_profile, bl_number, container_total_ctns, st.session_state.get("df_p_compiled", df_clean), subtotal_foreign, freight_dec, additional_notes, payment_terms, signatory_position, is_duties=True, duty_data=duty_dict)
-                        dut_link = upload_system_pdf_to_drive(html_dut_final, f"{(invoice_num if invoice_num.strip() else active_shell_uid)}_Official_Duties.pdf", client_name, invoice_num if invoice_num.strip() else active_shell_uid)
-                        df_update = load_log_data()
-                        df_update = sync_base_metadata_to_log(df_update, invoice_num, client_name, container_total_ctns, invoice_date, bl_number, freight_cost, additional_notes, subtotal_foreign)
-                        idx = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()[0]
-                        df_update.at[idx, "Official Duties Assessment"] = dut_link
-                        if save_log_data(df_update): st.success("✅ Customs Summary locked!")
+        st.markdown("#### Target Workspace Selected")
+        st.info(f"Active Workspace Shell: **{active_shell_uid}**")
 
 # ==========================================
 # 6. TOP NAVIGATION & WORKSPACE ROUTER
@@ -714,63 +678,16 @@ def render_admin_tracker():
 if "active_module" not in st.session_state:
     st.session_state["active_module"] = "📋 Cargo Tracker & Vault"
 
-col_nav1, col_nav2 = st.columns(2)
+col_nav1, col_nav2, col_nav3 = st.columns(3)
 with col_nav1:
-    if st.button("📋 Cargo Tracker & Vault", use_container_width=True): st.session_state["active_module"] = "📋 Cargo Tracker & Vault"
+    if st.button("📋 Cargo Tracker & Vault", use_container_width=True): 
+        st.session_state["active_module"] = "📋 Cargo Tracker & Vault"
 with col_nav2:
-    if st.button("📦 Shipment Document Hub", use_container_width=True): st.session_state["active_module"] = "📦 Shipment Document Hub"
-
-st.write("---")
-
-col_create, col_select = st.columns([1, 2])
-with col_create:
-    if st.button("➕ Create Empty Shipment Shell", type="primary", use_container_width=True):
-        with st.spinner("Initializing Workspace Shell..."):
-            df_current = load_log_data()
-            new_uid = f"UID-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            blank_row = {col: "" for col in LOG_COLUMNS}
-            blank_row["Row_UID"] = new_uid
-            blank_row["Invoice No"] = ""
-            blank_row["Total Cartons"] = 0
-            blank_row["Shipment Status"] = "Active"
-            blank_row["NALDO"] = "No"
-            blank_row["Lodged Status"] = "No"
-            blank_row["B/L Number"] = ""
-            blank_row["Freight"] = ""
-            blank_row["Cargo Notes"] = ""
-            for doc_slot in ALL_DOCS: blank_row[doc_slot] = "Pending Upload"
-            
-            df_new = pd.concat([df_current, pd.DataFrame([blank_row])], ignore_index=True)
-            if save_log_data(df_new):
-                st.session_state["active_shell_uid"] = new_uid
-                st.toast("Empty Workspace Shell successfully generated!", icon="✅")
-                st.rerun()
-
-with col_select:
-    df_dropdown = load_log_data()
-    dropdown_options = ["-- Choose Active Workspace --"]
-    if not df_dropdown.empty:
-        for _, r in df_dropdown.iterrows():
-            r_uid = str(r.get("Row_UID", "")).strip()
-            s_id = str(r.get("Invoice No", "")).strip()
-            s_ctns = str(r.get("Total Cartons", "")).strip()
-            s_client = str(r.get("Client Name", "")).strip()
-            if not r_uid: continue
-            display_name = s_id if s_id.strip() else "[Blank Entry]"
-            label = f"[{r_uid}] INV: {display_name}"
-            if s_client: label += f" | Client: {s_client}"
-            if s_ctns and s_ctns != "0" and s_ctns != "": label += f" | Cartons: {s_ctns}"
-            dropdown_options.append(label)
-
-    current_target_uid = st.session_state.get("active_shell_uid", "")
-    matching_indices = [i for i, opt in enumerate(dropdown_options) if f"[{current_target_uid}]" in opt]
-    default_sel_idx = matching_indices[0] if matching_indices and current_target_uid else 0
-
-    selected_option = st.selectbox("Select Target Workspace", dropdown_options, index=default_sel_idx, label_visibility="collapsed")
-    if selected_option != "-- Choose Active Workspace --":
-        match = re.search(r'\[(.*?)\]', selected_option)
-        if match: st.session_state["active_shell_uid"] = match.group(1)
-    else: st.session_state["active_shell_uid"] = ""
+    if st.button("📦 Shipment Document Hub", use_container_width=True): 
+        st.session_state["active_module"] = "📦 Shipment Document Hub"
+with col_nav3:
+    if st.button("🏛️ Nominated Agency Portal", use_container_width=True): 
+        st.session_state["active_module"] = "🏛️ Nominated Agency Portal"
 
 st.write("---")
 
@@ -778,3 +695,5 @@ if st.session_state["active_module"] == "📋 Cargo Tracker & Vault":
     render_master_log()
 elif st.session_state["active_module"] == "📦 Shipment Document Hub":
     render_admin_tracker()
+elif st.session_state["active_module"] == "🏛️ Nominated Agency Portal":
+    render_nominated_agency_portal()
