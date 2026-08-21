@@ -355,12 +355,49 @@ def render_nominated_agency_portal():
     st.caption("Corinthian Pins Limited | Trinidad Freight Solutions Limited | Rattans Freezone Limited")
     st.divider()
 
+    active_shell_uid = st.session_state.get("active_shell_uid", "")
+    df_current = load_log_data()
+    row_data = {}
+    
+    if active_shell_uid and active_shell_uid != "-- Choose Active Workspace --":
+        match_row = df_current[df_current['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()]
+        if not match_row.empty:
+            row_data = match_row.iloc[0].to_dict()
+
+    # Pre-populate from Source of Truth Google Sheet
+    default_bl = str(row_data.get("B/L Number", "")).strip() or "BL-2026-001"
+    default_cntr = str(row_data.get("Container #", "")).strip() or "CNTR-40912"
+    
+    default_usd = to_decimal(row_data.get("Subtotal (USD)", 50000.00))
+    if default_usd == 0: default_usd = 50000.00
+    
+    default_duty = to_decimal(row_data.get("Import Duties (TTD)", 12000.00))
+    if default_duty == 0: default_duty = 12000.00
+    
+    default_vat = to_decimal(row_data.get("Import VAT Paid (TTD)", 11250.00))
+    if default_vat == 0: default_vat = 11250.00
+    
+    default_deposit = to_decimal(row_data.get("Customs Deposit (TTD)", 30000.00))
+    if default_deposit == 0: default_deposit = 30000.00
+    
+    default_port = to_decimal(row_data.get("Additional Port Charges (TTD)", 4250.00))
+    if default_port == 0: default_port = 4250.00
+    
+    default_demurrage = to_decimal(row_data.get("Brokerage & Clearance Fees (TTD)", 2500.00))
+    if default_demurrage == 0: default_demurrage = 2500.00
+    
+    default_mgmt = to_decimal(row_data.get("Management Fees (TTD)", 25000.00))
+    if default_mgmt == 0: default_mgmt = 25000.00
+
+    if active_shell_uid:
+        st.success(f"🔗 Synced to Active Workspace Shell: **{active_shell_uid}** (Invoice: `{row_data.get('Invoice No', 'N/A')}`) ")
+
     st.markdown("#### 1. Shipment & Port Outlay Details")
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        bl_no = st.text_input("Bill of Lading (B/L) No.", value="BL-2026-001", key="nom_bl")
-        container_no = st.text_input("Container No.", value="CNTR-40912", key="nom_cntr")
+        bl_no = st.text_input("Bill of Lading (B/L) No.", value=default_bl, key="nom_bl")
+        container_no = st.text_input("Container No.", value=default_cntr, key="nom_cntr")
         shipment_status = st.selectbox(
             "Operational Shipment Status",
             [
@@ -373,14 +410,14 @@ def render_nominated_agency_portal():
         )
 
     with col2:
-        usd_cargo_val = st.number_input("Foreign Cargo Valuation (USD)", value=50000.00, step=1000.00, key="nom_usd")
+        usd_cargo_val = st.number_input("Foreign Cargo Valuation (USD)", value=default_usd, step=1000.00, key="nom_usd")
         exchange_rate = st.number_input("Exchange Rate (TTD/USD)", value=6.80, step=0.01, key="nom_fx")
         ttd_cargo_val = usd_cargo_val * exchange_rate
         st.info(f"Converted TTD Cargo Value: **${ttd_cargo_val:,.2f} TTD**")
 
     with col3:
-        bundled_service_fee = st.number_input("Corinthian Bundled Agency Fee (TTD)", value=25000.00, step=500.00, key="nom_fee")
-        contra_deposit_paid = st.number_input("Pre-Funded Advance Port Deposit (TTD)", value=30000.00, step=1000.00, key="nom_dep")
+        bundled_service_fee = st.number_input("Corinthian Bundled Agency Fee (TTD)", value=default_mgmt, step=500.00, key="nom_fee")
+        contra_deposit_paid = st.number_input("Pre-Funded Advance Port Deposit (TTD)", value=default_deposit, step=1000.00, key="nom_dep")
 
     st.divider()
 
@@ -388,12 +425,12 @@ def render_nominated_agency_portal():
     outlay_col1, outlay_col2 = st.columns(2)
 
     with outlay_col1:
-        customs_duty = st.number_input("Customs Import Duty (TTD)", value=12000.00, step=500.00, key="nom_dut")
-        import_vat = st.number_input("Customs Import VAT (12.5%) (TTD)", value=11250.00, step=500.00, key="nom_vat")
+        customs_duty = st.number_input("Customs Import Duty (TTD)", value=default_duty, step=500.00, key="nom_dut")
+        import_vat = st.number_input("Customs Import VAT (12.5%) (TTD)", value=default_vat, step=500.00, key="nom_vat")
 
     with outlay_col2:
-        port_handling = st.number_input("Port Authority Handling & Storage (TTD)", value=4250.00, step=250.00, key="nom_port")
-        shipping_line_demurrage = st.number_input("Shipping Line Demurrage & Fees (TTD)", value=2500.00, step=250.00, key="nom_dem")
+        port_handling = st.number_input("Port Authority Handling & Storage (TTD)", value=default_port, step=250.00, key="nom_port")
+        shipping_line_demurrage = st.number_input("Shipping Line Demurrage & Fees (TTD)", value=default_demurrage, step=250.00, key="nom_dem")
 
     port_items = [
         {"desc": "Customs Import Duty", "amount": customs_duty},
@@ -406,6 +443,26 @@ def render_nominated_agency_portal():
     service_vat = bundled_service_fee * 0.125
     gross_shipment_total = ttd_cargo_val + total_port_outlays + bundled_service_fee + service_vat
     net_contra_due = gross_shipment_total - ttd_cargo_val - contra_deposit_paid
+
+    # Save Back to Google Sheet Trigger
+    if active_shell_uid:
+        if st.button("💾 Save & Sync Outlays to Master Sheet", type="secondary", use_container_width=True):
+            df_update = load_log_data()
+            matches = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()
+            if matches:
+                idx = matches[0]
+                df_update.at[idx, "B/L Number"] = str(bl_no).strip()
+                df_update.at[idx, "Container #"] = str(container_no).strip()
+                df_update.at[idx, "Subtotal (USD)"] = f"{usd_cargo_val:,.2f}"
+                df_update.at[idx, "Import Duties (TTD)"] = f"{customs_duty:,.2f}"
+                df_update.at[idx, "Import VAT Paid (TTD)"] = f"{import_vat:,.2f}"
+                df_update.at[idx, "Customs Deposit (TTD)"] = f"{contra_deposit_paid:,.2f}"
+                df_update.at[idx, "Additional Port Charges (TTD)"] = f"{port_handling:,.2f}"
+                df_update.at[idx, "Brokerage & Clearance Fees (TTD)"] = f"{shipping_line_demurrage:,.2f}"
+                df_update.at[idx, "Management Fees (TTD)"] = f"{bundled_service_fee:,.2f}"
+                if save_log_data(df_update):
+                    st.success("✅ Nominated Agency parameters successfully synced to Google Sheet Source of Truth!")
+                    st.rerun()
 
     st.divider()
 
@@ -678,6 +735,7 @@ def render_admin_tracker():
 if "active_module" not in st.session_state:
     st.session_state["active_module"] = "📋 Cargo Tracker & Vault"
 
+# Module Navigation Tabs
 col_nav1, col_nav2, col_nav3 = st.columns(3)
 with col_nav1:
     if st.button("📋 Cargo Tracker & Vault", use_container_width=True): 
@@ -691,6 +749,60 @@ with col_nav3:
 
 st.write("---")
 
+# Persistent Workspace Shell Creator & Selector Bar (Applies Globally)
+col_create, col_select = st.columns([1, 2])
+with col_create:
+    if st.button("➕ Create Empty Shipment Shell", type="primary", use_container_width=True):
+        with st.spinner("Initializing Workspace Shell..."):
+            df_current = load_log_data()
+            new_uid = f"UID-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            blank_row = {col: "" for col in LOG_COLUMNS}
+            blank_row["Row_UID"] = new_uid
+            blank_row["Invoice No"] = ""
+            blank_row["Total Cartons"] = 0
+            blank_row["Shipment Status"] = "Active"
+            blank_row["NALDO"] = "No"
+            blank_row["Lodged Status"] = "No"
+            blank_row["B/L Number"] = ""
+            blank_row["Freight"] = ""
+            blank_row["Cargo Notes"] = ""
+            for doc_slot in ALL_DOCS: blank_row[doc_slot] = "Pending Upload"
+            
+            df_new = pd.concat([df_current, pd.DataFrame([blank_row])], ignore_index=True)
+            if save_log_data(df_new):
+                st.session_state["active_shell_uid"] = new_uid
+                st.toast("Empty Workspace Shell successfully generated!", icon="✅")
+                st.rerun()
+
+with col_select:
+    df_dropdown = load_log_data()
+    dropdown_options = ["-- Choose Active Workspace --"]
+    if not df_dropdown.empty:
+        for _, r in df_dropdown.iterrows():
+            r_uid = str(r.get("Row_UID", "")).strip()
+            s_id = str(r.get("Invoice No", "")).strip()
+            s_ctns = str(r.get("Total Cartons", "")).strip()
+            s_client = str(r.get("Client Name", "")).strip()
+            if not r_uid: continue
+            display_name = s_id if s_id.strip() else "[Blank Entry]"
+            label = f"[{r_uid}] INV: {display_name}"
+            if s_client: label += f" | Client: {s_client}"
+            if s_ctns and s_ctns != "0" and s_ctns != "": label += f" | Cartons: {s_ctns}"
+            dropdown_options.append(label)
+
+    current_target_uid = st.session_state.get("active_shell_uid", "")
+    matching_indices = [i for i, opt in enumerate(dropdown_options) if f"[{current_target_uid}]" in opt]
+    default_sel_idx = matching_indices[0] if matching_indices and current_target_uid else 0
+
+    selected_option = st.selectbox("Select Target Workspace", dropdown_options, index=default_sel_idx, label_visibility="collapsed")
+    if selected_option != "-- Choose Active Workspace --":
+        match = re.search(r'\[(.*?)\]', selected_option)
+        if match: st.session_state["active_shell_uid"] = match.group(1)
+    else: st.session_state["active_shell_uid"] = ""
+
+st.write("---")
+
+# Render Selected Module View
 if st.session_state["active_module"] == "📋 Cargo Tracker & Vault":
     render_master_log()
 elif st.session_state["active_module"] == "📦 Shipment Document Hub":
