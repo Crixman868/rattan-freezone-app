@@ -7,4 +7,8 @@ libopenjp2-7-dev
 libffi-dev
 shared-mime-info
 fontconfig
-wkhtmltopdf
+libxrender1
+libxext6
+xfonts-75dpi
+xfonts-base
+binutils
