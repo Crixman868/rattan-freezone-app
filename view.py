@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components  # Make sure this is imported!
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 import base64
@@ -40,7 +40,6 @@ if left_logo_b64:
     </script>
     """, height=0, width=0)
 
-# LOGOS SET TO 120PX, NO MARGINS SO THEY TOUCH THE TOP/BOTTOM OF THE BANNER
 left_img_tag = f'<img src="{left_logo_b64}" style="height: 120px; border-radius: 12px; object-fit: contain; display: block;">' if left_logo_b64 else ''
 right_img_tag = f'<img src="{right_logo_b64}" style="height: 120px; border-radius: 12px; object-fit: contain; display: block;">' if right_logo_b64 else ''
 
@@ -50,7 +49,7 @@ st.markdown(f"""
     .custom-header {{
         background: linear-gradient(135deg, #e60000 0%, #8b0000 100%);
         color: white; 
-        padding: 0px 30px; /* REMOVED TOP AND BOTTOM PADDING TO HUG LOGOS */
+        padding: 0px 30px;
         border-radius: 12px;
         box-shadow: 0 8px 20px rgba(220, 38, 38, 0.25), inset 0 2px 10px rgba(255,255,255,0.1);
         display: flex; justify-content: space-between; align-items: center;
@@ -59,7 +58,7 @@ st.markdown(f"""
     .header-center {{ display: flex; flex-direction: column; align-items: center; text-align: center; flex-grow: 1; }}
     .header-title {{ 
         font-family: 'Arial', sans-serif; 
-        font-size: 46px; /* MASSIVELY INCREASED FONT SIZE */
+        font-size: 46px; 
         font-weight: 900; 
         letter-spacing: 3px; 
         margin: 0; 
@@ -83,8 +82,17 @@ st.markdown(f"""
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Rcifpu4GRFAYFPQNBGrl96DpHXDiQM1JYys-Dhi0rrU/edit?usp=sharing"
 
-SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment", "Warehouse Delivery Note", "Finance Cost Statement"]
-EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
+# ==========================================
+# UPDATED 14-SLOT DOCUMENT VAULT SCHEMA
+# ==========================================
+SYSTEM_DOCS = [
+    "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment",
+    "Advance Port Disbursement Request", "Service Fee Disbursement Request", "Internal TFS Freight Invoice", 
+    "Master Agency Tax Invoice", "Official Payment Receipt"
+]
+EXTERNAL_DOCS = [
+    "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Shipping Catalogue"
+]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
 def get_gspread_client():
@@ -116,7 +124,6 @@ def get_eta_status(eta_date, shipment_status):
         return "🟢 IN TRANSIT"
     except: return "TBD"
 
-# UPDATED SUBHEADER
 st.subheader("📋 Cargo Tracker & Vault")
 
 df = load_log_data()
@@ -208,10 +215,10 @@ else:
             f8.write(f"**${mgmt or '0.00'}**")
             
             st.write("---")
-            st.markdown("#### 📑 Secure Document Vault")
-            grid = st.columns(6)
+            st.markdown("#### 📑 Secure Document Vault (14-Slot Matrix)")
+            grid = st.columns(7)
             for i, slot in enumerate(ALL_DOCS):
-                with grid[i % 6]:
+                with grid[i % 7]:
                     st.markdown(f"**{slot}**")
                     file_link = str(row.get(slot, ""))
                     if file_link.startswith("http"):
