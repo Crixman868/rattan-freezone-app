@@ -35,54 +35,42 @@ def get_img_b64(filename):
 
 def ensure_linux_wkhtmltopdf():
     """
-    Downloads and extracts a standalone wkhtmltopdf binary on Linux environments 
-    (Streamlit Cloud) when apt-get installation is unavailable.
+    Downloads and extracts a standalone generic static wkhtmltopdf binary on Linux environments 
+    (Streamlit Cloud) that does NOT rely on libssl.so.1.1.
     """
-    local_bin = os.path.join(BASE_DIR, "bin", "wkhtmltopdf")
+    bin_dir = os.path.join(BASE_DIR, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    local_bin = os.path.join(bin_dir, "wkhtmltopdf_static")
+    
     if os.path.exists(local_bin) and os.access(local_bin, os.X_OK):
         return local_bin
 
-    bin_dir = os.path.join(BASE_DIR, "bin")
-    os.makedirs(bin_dir, exist_ok=True)
-    
+    # Check system paths first
     for sys_path in ["/usr/bin/wkhtmltopdf", "/usr/local/bin/wkhtmltopdf"]:
         if os.path.exists(sys_path):
             return sys_path
 
-    deb_url = "https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_amd64.deb"
-    deb_path = os.path.join(bin_dir, "wkhtmltox.deb")
+    # Download static generic Linux x86_64 binary (no libssl.so.1.1 dependency)
+    tar_url = "https://github.com/wkhtmltopdf/wkhtmltopdf/releases/download/0.12.4/wkhtmltox-0.12.4_linux-generic-amd64.tar.xz"
+    tar_path = os.path.join(bin_dir, "wkhtmltox_static.tar.xz")
     
     try:
-        if not os.path.exists(deb_path):
-            urllib.request.urlretrieve(deb_url, deb_path)
+        if not os.path.exists(tar_path):
+            urllib.request.urlretrieve(tar_url, tar_path)
             
-        try:
-            subprocess.run(["ar", "x", deb_path], cwd=bin_dir, check=True)
-            subprocess.run(["tar", "-xf", os.path.join(bin_dir, "data.tar.xz")], cwd=bin_dir, check=True)
-        except Exception:
-            import tarfile
-            with open(deb_path, "rb") as f:
-                content = f.read()
-                idx = content.find(b"data.tar.xz")
-                if idx != -1:
-                    start = content.find(b"\xFD7zXZ\x00", idx)
-                    if start != -1:
-                        data_xz_path = os.path.join(bin_dir, "data.tar.xz")
-                        with open(data_xz_path, "wb") as df:
-                            df.write(content[start:])
-                        with tarfile.open(data_xz_path, "r:xz") as tar:
-                            tar.extractall(path=bin_dir)
-        
-        extracted_bin = os.path.join(bin_dir, "usr", "local", "bin", "wkhtmltopdf")
+        import tarfile
+        with tarfile.open(tar_path, "r:xz") as tar:
+            tar.extractall(path=bin_dir)
+            
+        extracted_bin = os.path.join(bin_dir, "wkhtmltox", "bin", "wkhtmltopdf")
         if os.path.exists(extracted_bin):
+            if os.path.exists(local_bin):
+                os.remove(local_bin)
             os.rename(extracted_bin, local_bin)
             os.chmod(local_bin, 0o755)
             return local_bin
-        elif os.path.exists(local_bin):
-            os.chmod(local_bin, 0o755)
-            return local_bin
     except Exception as e:
-        print(f"Error auto-installing wkhtmltopdf: {e}")
+        print(f"Error auto-installing static wkhtmltopdf: {e}")
         
     return None
 
@@ -119,7 +107,6 @@ def get_entity_info(company_name):
 def generate_pdf(template_name, context, output_filename, bl_no):
     """
     Renders Jinja2 HTML template and compiles PDF document via pdfkit.
-    Configured with robust error ignoring for Linux Streamlit Cloud compatibility.
     """
     shipment_dir = os.path.join(OUTPUT_DIR, str(bl_no).strip())
     os.makedirs(shipment_dir, exist_ok=True)
@@ -147,11 +134,7 @@ def generate_pdf(template_name, context, output_filename, bl_no):
         if os.path.exists(path_wkhtmltopdf):
             config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
     elif platform.system() == "Linux":
-        if os.path.exists('/usr/bin/wkhtmltopdf'):
-            path_wkhtmltopdf = '/usr/bin/wkhtmltopdf'
-        else:
-            path_wkhtmltopdf = ensure_linux_wkhtmltopdf()
-            
+        path_wkhtmltopdf = ensure_linux_wkhtmltopdf()
         if path_wkhtmltopdf and os.path.exists(path_wkhtmltopdf):
             config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
 
