@@ -345,8 +345,33 @@ def render_document_workspace(doc_title, doc_filename, bl_no, generate_callback,
             st.link_button("🔗 Open Document in Google Drive", url=drive_link, use_container_width=True)
 
         st.markdown("##### 👁️ Document Preview")
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf" style="border: 1px solid #cbd5e0; border-radius: 6px;"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
+        
+        pdf_viewer_html = f'''
+        <div id="pdf-container" style="width: 100%; text-align: center; background-color: #f8fafc; padding: 15px; border: 1px solid #cbd5e0; border-radius: 6px;">
+            <canvas id="pdf-canvas" style="max-width: 100%; height: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border-radius: 4px;"></canvas>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+        <script>
+            const pdfData = atob("{base64_pdf}");
+            const loadingTask = pdfjsLib.getDocument({{data: pdfData}});
+            loadingTask.promise.then(function(pdf) {{
+                pdf.getPage(1).then(function(page) {{
+                    const scale = 1.5;
+                    const viewport = page.getViewport({{scale: scale}});
+                    const canvas = document.getElementById('pdf-canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    const renderContext = {{
+                        canvasContext: context,
+                        viewport: viewport
+                    }};
+                    page.render(renderContext);
+                }});
+            }});
+        </script>
+        '''
+        components.html(pdf_viewer_html, height=750, scrolling=True)
     else:
         st.info(f"ℹ️ {doc_title} has not been generated yet for B/L **{bl_no}**. Click the button above to generate.")
 
@@ -370,7 +395,6 @@ def render_nominated_agency_portal():
 
     row_data = match_row.iloc[0].to_dict()
 
-    # FORCE RELOAD SHEET VALUES INTO SESSION STATE WHEN WORKSPACE SWITCHES
     if st.session_state.get("nom_loaded_shell_uid") != active_shell_uid:
         st.session_state["nom_bl"] = str(row_data.get("B/L Number", "")).strip() or "BL-2026-001"
         st.session_state["nom_cntr"] = str(row_data.get("Container #", "")).strip() or "CNTR-40912"
@@ -454,7 +478,6 @@ def render_nominated_agency_portal():
     gross_shipment_total = ttd_cargo_val + total_port_outlays + bundled_service_fee + service_vat
     net_contra_due = gross_shipment_total - ttd_cargo_val - contra_deposit_paid
 
-    # Save Back to Google Sheet Trigger
     if st.button("💾 Save & Sync Outlays to Master Sheet", type="primary", use_container_width=True):
         with st.spinner("Syncing outlays to Google Sheet Master Ledger..."):
             df_update = load_log_data()
@@ -471,7 +494,6 @@ def render_nominated_agency_portal():
                 df_update.at[idx, "Brokerage & Clearance Fees (TTD)"] = f"{shipping_line_demurrage:,.2f}"
                 df_update.at[idx, "Management Fees (TTD)"] = f"{bundled_service_fee:,.2f}"
                 if save_log_data(df_update):
-                    # Force reload session_state on next run to reflect saved values
                     st.session_state["nom_loaded_shell_uid"] = ""
                     st.success("✅ Nominated Agency parameters successfully synced to Google Sheet Source of Truth!")
                     st.rerun()
@@ -811,7 +833,6 @@ with col_select:
             new_uid = match.group(1)
             if st.session_state.get("active_shell_uid") != new_uid:
                 st.session_state["active_shell_uid"] = new_uid
-                # Reset Nominated Agency loaded state so it picks up the newly selected shell's values
                 st.session_state["nom_loaded_shell_uid"] = ""
     else: 
         st.session_state["active_shell_uid"] = ""
