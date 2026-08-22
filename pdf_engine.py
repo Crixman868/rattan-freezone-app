@@ -1,4 +1,5 @@
 import os
+import base64
 import platform
 import subprocess
 import urllib.request
@@ -19,40 +20,76 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
 env.filters['currency'] = lambda val: f"{float(val):,.2f}" if val is not None else "0.00"
 
+def get_img_b64(filename):
+    """Encodes an image from assets/ into a self-contained Base64 data URI."""
+    if not filename or pd.isna(filename):
+        return ""
+    path = os.path.join(ASSETS_DIR, str(filename).strip())
+    if os.path.exists(path):
+        ext = os.path.splitext(filename)[1].lower().replace(".", "")
+        mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+            return f"data:image/{mime};base64,{encoded}"
+    return ""
+
 def ensure_linux_wkhtmltopdf():
     """
     Downloads and extracts a standalone wkhtmltopdf binary on Linux environments 
     (Streamlit Cloud) when apt-get installation is unavailable.
     """
     local_bin = os.path.join(BASE_DIR, "bin", "wkhtmltopdf")
-    if os.path.exists(local_bin):
+    if os.path.exists(local_bin) and os.access(local_bin, os.X_OK):
         return local_bin
 
     bin_dir = os.path.join(BASE_DIR, "bin")
     os.makedirs(bin_dir, exist_ok=True)
     
+    for sys_path in ["/usr/bin/wkhtmltopdf", "/usr/local/bin/wkhtmltopdf"]:
+        if os.path.exists(sys_path):
+            return sys_path
+
     deb_url = "https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_amd64.deb"
     deb_path = os.path.join(bin_dir, "wkhtmltox.deb")
     
     try:
-        urllib.request.urlretrieve(deb_url, deb_path)
-        subprocess.run(["ar", "x", deb_path], cwd=bin_dir, check=True)
-        subprocess.run(["tar", "-xf", os.path.join(bin_dir, "data.tar.xz")], cwd=bin_dir, check=True)
+        if not os.path.exists(deb_path):
+            urllib.request.urlretrieve(deb_url, deb_path)
+            
+        try:
+            subprocess.run(["ar", "x", deb_path], cwd=bin_dir, check=True)
+            subprocess.run(["tar", "-xf", os.path.join(bin_dir, "data.tar.xz")], cwd=bin_dir, check=True)
+        except Exception:
+            import tarfile
+            with open(deb_path, "rb") as f:
+                content = f.read()
+                idx = content.find(b"data.tar.xz")
+                if idx != -1:
+                    start = content.find(b"\xFD7zXZ\x00", idx)
+                    if start != -1:
+                        data_xz_path = os.path.join(bin_dir, "data.tar.xz")
+                        with open(data_xz_path, "wb") as df:
+                            df.write(content[start:])
+                        with tarfile.open(data_xz_path, "r:xz") as tar:
+                            tar.extractall(path=bin_dir)
         
         extracted_bin = os.path.join(bin_dir, "usr", "local", "bin", "wkhtmltopdf")
         if os.path.exists(extracted_bin):
             os.rename(extracted_bin, local_bin)
             os.chmod(local_bin, 0o755)
             return local_bin
+        elif os.path.exists(local_bin):
+            os.chmod(local_bin, 0o755)
+            return local_bin
     except Exception as e:
-        print(f"Error auto-installing wkhtmltopdf binary: {e}")
+        print(f"Error auto-installing wkhtmltopdf: {e}")
         
     return None
 
 def get_entity_info(company_name):
     """
     Fetches company details from entities_config.csv and converts logo, 
-    stamp, and signature files to absolute file:/// URIs for wkhtmltopdf.
+    stamp, and signature files to inline Base64 data URIs.
     """
     if not os.path.exists(ENTITIES_CSV):
         return {"Company_Name": company_name, "Registered_Address": "", "logo_path": "", "stamp_path": "", "sig_path": ""}
@@ -66,8 +103,7 @@ def get_entity_info(company_name):
             val = data.get(key)
             path_key = key.replace("_file", "_path")
             if pd.notna(val) and str(val).strip():
-                full_path = os.path.join(ASSETS_DIR, str(val).strip()).replace("\\", "/")
-                data[path_key] = f"file:///{full_path}"
+                data[path_key] = get_img_b64(str(val).strip())
             else:
                 data[path_key] = ""
         return data
@@ -83,7 +119,7 @@ def get_entity_info(company_name):
 def generate_pdf(template_name, context, output_filename, bl_no):
     """
     Renders Jinja2 HTML template and compiles PDF document via pdfkit.
-    Detects Windows vs Linux environment dynamically for wkhtmltopdf binary path.
+    Configured with robust error ignoring for Linux Streamlit Cloud compatibility.
     """
     shipment_dir = os.path.join(OUTPUT_DIR, str(bl_no).strip())
     os.makedirs(shipment_dir, exist_ok=True)
@@ -99,7 +135,10 @@ def generate_pdf(template_name, context, output_filename, bl_no):
         'margin-bottom': '0.5in',
         'margin-left': '0.5in',
         'encoding': "UTF-8",
-        'enable-local-file-access': None
+        'enable-local-file-access': None,
+        'load-error-handling': 'ignore',
+        'load-media-error-handling': 'ignore',
+        'quiet': None
     }
     
     config = None
