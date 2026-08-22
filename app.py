@@ -91,19 +91,24 @@ ROOT_FOLDER_ID = "1GtZk2jfAHGqttyZVP9E8G4TA_MNrV9Pp"
 
 ALL_COUNTRIES = ["", "USA", "China", "UK", "Canada", "Brazil", "Mexico", "Panama", "Japan", "Germany", "India", "France", "Italy", "South Korea", "Spain", "Australia", "Taiwan", "Netherlands", "Vietnam", "Malaysia", "Singapore", "South Africa", "UAE", "Saudi Arabia", "Switzerland", "Sweden", "Poland", "Belgium", "Thailand", "Indonesia", "Turkey", "Philippines", "Ireland", "Other"]
 
-SYSTEM_DOCS = ["Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment", "Warehouse Delivery Note", "Finance Cost Statement"]
-EXTERNAL_DOCS = ["Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Other Documents", "Miscellaneous Supporting Doc"]
+SYSTEM_DOCS = [
+    "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment",
+    "Advance Port Disbursement Request", "Service Fee Disbursement Request", "Internal TFS Freight Invoice", 
+    "Master Agency Tax Invoice", "Official Payment Receipt"
+]
+EXTERNAL_DOCS = [
+    "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Shipping Catalogue"
+]
 ALL_DOCS = SYSTEM_DOCS + EXTERNAL_DOCS
 
 LOG_COLUMNS = [
     "Row_UID", "Invoice No", "Client Name", "Container #", "Country of Origin", "ETA", 
-    "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", "B/L Number", "Freight", "Cargo Notes",
-    "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment", 
-    "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", 
-    "Other Documents", "Miscellaneous Supporting Doc",
+    "Lodged Status", "Shipment Status", "NALDO", "Total Cartons", "B/L Number", "Freight", "Cargo Notes", "Invoice Date",
+    "Commercial Invoice", "CARICOM Invoice", "Sequential Packing List", "Official Duties Assessment",
+    "Advance Port Disbursement Request", "Service Fee Disbursement Request", "Internal TFS Freight Invoice", "Master Agency Tax Invoice", "Official Payment Receipt",
+    "Bill of Lading Scan", "Original Invoice", "Original Packing List", "Tracker Document", "Shipping Catalogue",
     "Subtotal (USD)", "Import Duties (TTD)", "Customs Deposit (TTD)", "Import VAT Paid (TTD)",
-    "Additional Port Charges (TTD)", "Brokerage & Clearance Fees (TTD)", "Management Fees (TTD)",
-    "Warehouse Delivery Note", "Finance Cost Statement", "Invoice Date"
+    "Additional Port Charges (TTD)", "Brokerage & Clearance Fees (TTD)", "Management Fees (TTD)"
 ]
 
 # ==========================================
@@ -144,9 +149,12 @@ def save_log_data(df):
         ws.clear()
         df = df.copy()
         for col in df.columns: df[col] = df[col].astype(str).replace(['nan', 'None'], '')
-        for col in LOG_COLUMNS:
+        
+        all_cols = list(dict.fromkeys(LOG_COLUMNS + [c for c in df.columns if c not in LOG_COLUMNS]))
+        for col in all_cols:
             if col not in df.columns: df[col] = ""
-        df = df[LOG_COLUMNS]
+        df = df[all_cols]
+        
         ws.update([df.columns.values.tolist()] + df.values.tolist())
         st.cache_data.clear()
         return True
@@ -154,35 +162,42 @@ def save_log_data(df):
         st.error(f"Failed to sync with Google Sheets: {e}")
         return False
 
-def sync_local_pdf_to_google_drive(local_pdf_path, client_name, bl_number):
+def sync_local_pdf_to_google_drive(local_pdf_path, client_name, invoice_no_or_uid):
     if not os.path.exists(local_pdf_path):
         return None, "Local file not found on disk."
         
     try:
         drive = get_drive_service()
         file_name = os.path.basename(local_pdf_path)
-        safe_client_name = str(client_name).replace("'", "\\'")
-        safe_bl_number = str(bl_number).replace("'", "\\'")
         
+        c_name = str(client_name).strip() if client_name and str(client_name).strip() else "Rattans Freezone Limited"
+        inv_folder = str(invoice_no_or_uid).strip() if invoice_no_or_uid and str(invoice_no_or_uid).strip() else "General_Shipments"
+        
+        safe_client_name = c_name.replace("'", "\\'")
+        safe_invoice_folder = inv_folder.replace("'", "\\'")
+        
+        # 1. Find or create Client Folder in Root
         folders = drive.files().list(
             q=f"name='{safe_client_name}' and '{ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
             fields="files(id, name)"
         ).execute().get('files', [])
         client_folder_id = folders[0]['id'] if folders else drive.files().create(
-            body={"name": client_name, "parents": [ROOT_FOLDER_ID], "mimeType": "application/vnd.google-apps.folder"}
+            body={"name": c_name, "parents": [ROOT_FOLDER_ID], "mimeType": "application/vnd.google-apps.folder"}
         ).execute()['id']
         
-        bl_folders = drive.files().list(
-            q=f"name='{safe_bl_number}' and '{client_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
+        # 2. Find or create Invoice/UID Subfolder in Client Folder
+        inv_folders = drive.files().list(
+            q=f"name='{safe_invoice_folder}' and '{client_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false",
             fields="files(id, name)"
         ).execute().get('files', [])
-        bl_folder_id = bl_folders[0]['id'] if bl_folders else drive.files().create(
-            body={"name": str(bl_number), "parents": [client_folder_id], "mimeType": "application/vnd.google-apps.folder"}
+        inv_folder_id = inv_folders[0]['id'] if inv_folders else drive.files().create(
+            body={"name": inv_folder, "parents": [client_folder_id], "mimeType": "application/vnd.google-apps.folder"}
         ).execute()['id']
         
+        # 3. Upload or Update PDF File inside Invoice Subfolder
         media = MediaFileUpload(local_pdf_path, mimetype='application/pdf', resumable=True)
         existing_files = drive.files().list(
-            q=f"name='{file_name}' and '{bl_folder_id}' in parents and trashed=false",
+            q=f"name='{file_name}' and '{inv_folder_id}' in parents and trashed=false",
             fields="files(id, webViewLink)"
         ).execute().get('files', [])
         
@@ -190,7 +205,7 @@ def sync_local_pdf_to_google_drive(local_pdf_path, client_name, bl_number):
             file_id = existing_files[0]['id']
             final_file = drive.files().update(fileId=file_id, media_body=media, fields='id, webViewLink').execute()
         else:
-            file_metadata = {'name': file_name, 'parents': [bl_folder_id]}
+            file_metadata = {'name': file_name, 'parents': [inv_folder_id]}
             final_file = drive.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
             
         return final_file.get('webViewLink'), None
@@ -300,7 +315,7 @@ def display_html_preview(raw_html):
 # ==========================================
 # 4. NOMINATED AGENCY PORTAL (MODULE 3)
 # ==========================================
-def render_document_workspace(doc_title, doc_filename, bl_no, generate_callback, key_prefix, entity_client_name="Corinthian Pins Limited"):
+def render_document_workspace(doc_title, doc_filename, bl_no, generate_callback, key_prefix, entity_client_name="Corinthian Pins Limited", sheet_column_name="Advance Port Disbursement Request", invoice_folder_target=""):
     st.markdown(f"### {doc_title}")
     
     shipment_dir = os.path.join(pdf_engine.OUTPUT_DIR, str(bl_no).strip())
@@ -331,17 +346,30 @@ def render_document_workspace(doc_title, doc_filename, bl_no, generate_callback,
             )
         with c_vault:
             if st.button(f"☁️ Save to Vault / Google Drive", key=f"vault_{key_prefix}", use_container_width=True):
-                with st.spinner("Synchronizing document to Google Drive Vault..."):
-                    drive_url, err_msg = sync_local_pdf_to_google_drive(file_path, entity_client_name, bl_no)
+                with st.spinner("Synchronizing document to Google Drive Vault and updating Google Sheet..."):
+                    target_folder = invoice_folder_target or bl_no
+                    drive_url, err_msg = sync_local_pdf_to_google_drive(file_path, entity_client_name, target_folder)
+                    
                     if drive_url:
                         st.session_state[f"vault_link_{key_prefix}"] = drive_url
                         st.session_state[f"vault_status_{key_prefix}"] = True
+                        
+                        active_shell_uid = st.session_state.get("active_shell_uid", "")
+                        if active_shell_uid:
+                            df_update = load_log_data()
+                            matches = df_update.index[df_update['Row_UID'].astype(str).str.strip() == active_shell_uid.strip()].tolist()
+                            if matches:
+                                idx = matches[0]
+                                if sheet_column_name not in df_update.columns:
+                                    df_update[sheet_column_name] = ""
+                                df_update.at[idx, sheet_column_name] = drive_url
+                                save_log_data(df_update)
                     else:
                         st.error(f"Vault Upload Failed: {err_msg}")
 
         if st.session_state.get(f"vault_status_{key_prefix}"):
             drive_link = st.session_state.get(f"vault_link_{key_prefix}", "#")
-            st.success("✅ Saved and synchronized to Cloud Vault!")
+            st.success(f"✅ Saved to Cloud Vault and linked in Google Sheet under `{sheet_column_name}`!")
             st.link_button("🔗 Open Document in Google Drive", url=drive_link, use_container_width=True)
 
         st.markdown("##### 👁️ Document Preview")
@@ -422,9 +450,9 @@ def render_nominated_agency_portal():
 
         st.session_state["nom_loaded_shell_uid"] = active_shell_uid
 
-    inv_no_disp = str(row_data.get('Invoice No', 'N/A')).strip() or 'N/A'
-    client_disp = str(row_data.get('Client Name', 'N/A')).strip() or 'N/A'
-    st.success(f"🔗 **Live Workspace Active:** `{active_shell_uid}` | **Invoice:** `{inv_no_disp}` | **Client:** `{client_disp}`")
+    inv_no_disp = str(row_data.get('Invoice No', '')).strip() or active_shell_uid
+    client_disp = str(row_data.get('Client Name', '')).strip() or 'Rattans Freezone Limited'
+    st.success(f"🔗 **Live Workspace Active:** `{active_shell_uid}` | **Invoice / Folder:** `{inv_no_disp}` | **Client:** `{client_disp}`")
 
     st.markdown("#### 1. Shipment & Port Outlay Details")
     col1, col2, col3 = st.columns(3)
@@ -520,7 +548,9 @@ def render_nominated_agency_portal():
                 bl_no=bl_no,
                 generate_callback=lambda: pdf_engine.generate_port_disbursement_request(bl_no, container_no, port_items=port_items),
                 key_prefix="stg1_port",
-                entity_client_name="Corinthian Pins Limited"
+                entity_client_name=client_disp,
+                sheet_column_name="Advance Port Disbursement Request",
+                invoice_folder_target=inv_no_disp
             )
             
         with subtab_service:
@@ -530,7 +560,9 @@ def render_nominated_agency_portal():
                 bl_no=bl_no,
                 generate_callback=lambda: pdf_engine.generate_service_disbursement_request(bl_no, container_no, bundled_service_fee=bundled_service_fee),
                 key_prefix="stg1_service",
-                entity_client_name="Corinthian Pins Limited"
+                entity_client_name=client_disp,
+                sheet_column_name="Service Fee Disbursement Request",
+                invoice_folder_target=inv_no_disp
             )
             
         with subtab_tfs:
@@ -540,7 +572,9 @@ def render_nominated_agency_portal():
                 bl_no=bl_no,
                 generate_callback=lambda: pdf_engine.generate_internal_tfs_invoice(bl_no, container_no, tfs_base=5500.00),
                 key_prefix="stg1_tfs",
-                entity_client_name="Trinidad Freight Solutions Limited"
+                entity_client_name=client_disp,
+                sheet_column_name="Internal TFS Freight Invoice",
+                invoice_folder_target=inv_no_disp
             )
 
     with stage2_tab:
@@ -572,7 +606,9 @@ def render_nominated_agency_portal():
                             contra_deposit_paid=contra_deposit_paid
                         ),
                         key_prefix="stg2_master",
-                        entity_client_name="Corinthian Pins Limited"
+                        entity_client_name=client_disp,
+                        sheet_column_name="Master Agency Tax Invoice",
+                        invoice_folder_target=inv_no_disp
                     )
                     
                 with subtab_receipt:
@@ -582,7 +618,9 @@ def render_nominated_agency_portal():
                         bl_no=bl_no,
                         generate_callback=lambda: pdf_engine.generate_official_receipt(bl_no, container_no, amount_paid=net_contra_due),
                         key_prefix="stg2_receipt",
-                        entity_client_name="Corinthian Pins Limited"
+                        entity_client_name=client_disp,
+                        sheet_column_name="Official Payment Receipt",
+                        invoice_folder_target=inv_no_disp
                     )
             else:
                 st.info("Check the confirmation box above to unlock final invoicing and discharge workspaces.")
@@ -650,13 +688,13 @@ def render_master_log():
                 with c_f6: new_mgmt = st.text_input("Management Fees ($ TTD)", value=str(row.get("Management Fees (TTD)", "")), key=f"mgmt_{idx}")
 
                 st.write("---")
-                st.markdown("#### Document Vault (12-Slot Matrix)")
+                st.markdown("#### Document Vault (14-Slot Matrix)")
                 
-                grid = st.columns(6)
+                grid = st.columns(7)
                 upload_cache = {}
 
                 for i, slot in enumerate(ALL_DOCS):
-                    with grid[i % 6]:
+                    with grid[i % 7]:
                         st.markdown(f"**{slot}**")
                         file_link = str(row.get(slot, ""))
                         if file_link.startswith("http"):
@@ -673,7 +711,7 @@ def render_master_log():
                             if uploaded_file: upload_cache[slot] = uploaded_file
                 
                 st.write("---")
-                m_btn1, m_btn2 = st.columns(2)
+                m_btn1 = st.container()
                 with m_btn1:
                     if st.button("💾 Save Shipment Updates", key=f"save_{idx}", type="primary", use_container_width=True):
                         with st.spinner("Processing updates..."):
@@ -702,34 +740,6 @@ def render_master_log():
                                 
                             if save_log_data(df_update):
                                 st.success("✅ Updates saved!")
-                                st.rerun()
-
-                with m_btn2:
-                    if st.button("📄 Generate & Lock Post-Clearance Package", key=f"pkg_{idx}", use_container_width=True):
-                        with st.spinner("Building Delivery Note & Finance Statement..."):
-                            curr_date_str = datetime.now().strftime("%Y-%m-%d")
-                            html_wh = pdf_engine.generate_warehouse_delivery_note_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str) if hasattr(pdf_engine, 'generate_warehouse_delivery_note_html') else ""
-                            wh_link = upload_system_pdf_to_drive(html_wh, f"{(inv_no if inv_no.strip() else row_uid)}_Warehouse_Delivery_Note.pdf", client_name, inv_no if inv_no.strip() else row_uid)
-                            
-                            sub_usd = to_decimal(new_subtotal)
-                            fr_usd = to_decimal(new_freight)
-                            dut_ttd = to_decimal(new_duties)
-                            dep_ttd = to_decimal(new_deposit)
-                            vat_ttd = to_decimal(new_vat)
-                            port_ttd = to_decimal(new_port)
-                            brok_ttd = to_decimal(new_brokerage)
-                            mgmt_ttd = to_decimal(new_mgmt)
-                            
-                            html_fin = pdf_engine.generate_finance_cost_statement_html(inv_no, new_cont, new_bl, total_cartons, curr_date_str, sub_usd, fr_usd, dut_ttd, dep_ttd, vat_ttd, port_ttd, brok_ttd, mgmt_ttd) if hasattr(pdf_engine, 'generate_finance_cost_statement_html') else ""
-                            fin_link = upload_system_pdf_to_drive(html_fin, f"{(inv_no if inv_no.strip() else row_uid)}_Finance_Cost_Statement.pdf", client_name, inv_no if inv_no.strip() else row_uid)
-                            
-                            df_update = load_log_data()
-                            row_index = df_update.index[df_update['Row_UID'].astype(str).str.strip() == row_uid.strip()].tolist()[0]
-                            df_update.at[row_index, "Warehouse Delivery Note"] = wh_link
-                            df_update.at[row_index, "Finance Cost Statement"] = fin_link
-                            
-                            if save_log_data(df_update):
-                                st.success("✅ Package linked and saved to Drive!")
                                 st.rerun()
 
 def render_admin_tracker():
